@@ -14,3 +14,4 @@
 
 - [native函数篡改](./nativeImmediate.js)
 
+- [启动指定Activity](./launchActivity.js)
