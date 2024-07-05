@@ -14,4 +14,7 @@
 
 - [native函数篡改](./nativeImmediate.js)
 
+- [native函数根据offset主动调用](./nativeInvoke.js)
+
 - [启动指定Activity](./launchActivity.js)
+
