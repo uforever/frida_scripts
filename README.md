@@ -18,3 +18,4 @@
 
 - [启动指定Activity](./launchActivity.js)
 
+- [简易脱壳](./shucking.js)
