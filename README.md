@@ -19,3 +19,5 @@
 - [启动指定Activity](./launchActivity.js)
 
 - [简易脱壳](./shucking.js)
+
+- [native注册监控](./nativeRegister.js)
