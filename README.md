@@ -12,6 +12,8 @@
 
 - [native层hook](./nativeTimeout.js)
 
+- [native函数修改返回值](./modifyRetval.js)
+
 - [native函数篡改](./nativeImmediate.js)
 
 - [native函数根据offset主动调用](./nativeInvoke.js)
