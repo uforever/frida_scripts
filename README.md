@@ -23,3 +23,5 @@
 - [简易脱壳](./shucking.js)
 
 - [native注册监控](./nativeRegister.js)
+
+- [线程反调试绕过](./pthreadBypass.js)
