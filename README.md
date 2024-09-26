@@ -25,3 +25,7 @@
 - [native注册监控](./nativeRegister.js)
 
 - [线程反调试绕过](./pthreadBypass.js)
+
+- [frida反调试+patchCode](./patchCode.js)
+
+- [elf文件hook](./elfHook.js)
