@@ -29,3 +29,5 @@
 - [frida反调试+patchCode](./patchCode.js)
 
 - [elf文件hook](./elfHook.js)
+
+- [native插桩](./nativeLog.js)
