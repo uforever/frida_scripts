@@ -1,3 +1,24 @@
+// 如果OkHttp被混淆了 需要手动反编译找到混淆后的包名
+// 可以通过手动搜索关键字查找 如
+// OkHttpClient CertificatePinner
+const okHttpPackageName = "nl";
+// const okHttpPackageName = "okhttp3";
+
+function main() {
+    Java.perform(() => {
+        // const application = Java.use("android.app.Application");
+        // application.attach.overload("android.content.Context").implementation = function (context) {
+        //     this.attach(context);
+        //     const classLoader = context.getClassLoader();
+        //     const classFactory = Java.ClassFactory.get(classLoader);
+        //     sslUnpinning(classFactory);
+        // };
+
+        // 如果没有壳 可以直接
+        sslUnpinning(Java);
+    });
+}
+
 function classExists(classFactory, className) {
     try {
         classFactory.use(className);
@@ -9,7 +30,7 @@ function classExists(classFactory, className) {
 
 function sslUnpinning(classFactory) {
     // 如果使用了OkHttp
-    const targetOkHttpClassName = "okhttp3.OkHttpClient$Builder";
+    const targetOkHttpClassName = `${okHttpPackageName}.OkHttpClient$Builder`;
     if (classExists(classFactory, targetOkHttpClassName)) {
 
         // OkHttp Customizing Trusted Certificates 示例
@@ -257,21 +278,6 @@ function sslUnpinning(classFactory) {
         } catch (_err) { }
     }
 
-}
-
-function main() {
-    Java.perform(() => {
-        const application = Java.use("android.app.Application");
-        application.attach.overload("android.content.Context").implementation = function (context) {
-            this.attach(context);
-            const classLoader = context.getClassLoader();
-            const classFactory = Java.ClassFactory.get(classLoader);
-            sslUnpinning(classFactory);
-        };
-
-        // 如果没有壳 可以直接
-        // sslUnpinning(Java);
-    });
 }
 
 setImmediate(main);
