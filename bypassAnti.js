@@ -48,6 +48,7 @@ function hook_before_init_proc(targetSo) {
     const baseAddr = targetSo.base;
     console.log("targetSo.base: " + baseAddr);
 
+    // 分析前先注释掉这里
     nop(baseAddr, 0x1C544);
     nop(baseAddr, 0x1B8D4);
     nop(baseAddr, 0x26E5C);
