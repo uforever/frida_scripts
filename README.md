@@ -39,3 +39,5 @@
 - [不全但更详细的sslUnpin：包括过轻度混淆、其它常用框架](unpinMore.js)
 
 - [服务端校验证书导出](certificateExport.js)
+
+- [反调试绕过：libmsaoaidsec.so如bili、soul、xhs](bypassAnti.js)
