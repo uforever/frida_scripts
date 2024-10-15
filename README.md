@@ -41,3 +41,5 @@
 - [服务端校验证书导出](certificateExport.js)
 
 - [反调试绕过：libmsaoaidsec.so如bili、soul、xhs](bypassAnti.js)
+
+- [socket抓包](socketHook.js)
