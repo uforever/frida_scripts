@@ -1,19 +1,18 @@
 const targetLib = "libmsaoaidsec.so";
 let alreadyHook = false;
 
+// TODO: doJavaHook
 function main() {
     const adeAddr = Module.findExportByName(null, "android_dlopen_ext");
     Interceptor.attach(adeAddr, {
         onEnter: function (args) {
             const pathptr = args[0];
-            this.isTarget = false;
             if (pathptr) {
                 const path = ptr(pathptr).readCString();
                 console.log("[dylib open]: ", path);
 
                 if (path.includes(targetLib)) {
                     hook_init_proc();
-                    this.isTarget = true;
                 }
             }
         },
