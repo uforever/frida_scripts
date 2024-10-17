@@ -1,9 +1,9 @@
+const targetLib = "libmsaoaidsec.so";
+let alreadyHook = false;
 let classFactory = null;
-// 如果OkHttp被混淆了 需要手动反编译找到混淆后的包名
-// 可以通过手动搜索关键字查找 如
-// OkHttpClient CertificatePinner
-// const okHttpPackageName = "nl";
+
 const okHttpPackageName = "okhttp3";
+const searchedPackages = new Set();
 
 let customArrayList = null;
 let customTrustManager = null;
@@ -13,21 +13,195 @@ let customHostnameVerifier = null;
 let customSslContext = null;
 
 function main() {
-  Java.perform(() => {
-    // 没有壳
-    // classFactory = Java;
-    // sslUnpinning();
+  const adeAddr = Module.findExportByName(null, "android_dlopen_ext");
+  Interceptor.attach(adeAddr, {
+    onEnter: function (args) {
+      const pathptr = args[0];
+      if (pathptr) {
+        const path = ptr(pathptr).readCString();
+        // 分析前先打开
+        // console.log("[dylib open]: ", path);
 
-    // 有壳
-    const Application = Java.use("android.app.Application");
-    Application.attach.overload("android.content.Context").implementation = function (context) {
-      this.attach(context);
-      const classLoader = context.getClassLoader();
-      classFactory = Java.ClassFactory.get(classLoader);
-      sslUnpinning();
-    };
+        if (path.includes(targetLib)) {
+          this.isTarget = true;
+          hook_init_proc();
+        }
+      }
+    },
+    onLeave: function () {
+      if (this.isTarget) {
+        const jniOnload = Module.findExportByName(targetLib, "JNI_OnLoad");
+        console.log("[hit JNI_OnLoad]: " + jniOnload);
+        // 如果有输出的话 说明检测点在JNI_OnLoad之中或者之后
+        // 否则可能在.init_proc .init_array .init_xxx等函数中
+        Interceptor.attach(jniOnload, {
+          onEnter: function (_args) {
+            // 其中有检测是否有java层hook
+            // hook后 & 0x80000 != 0
+            console.log("[func invoke]: JNI_OnLoad");
+          },
+          onLeave: function () {
+            if (Java.available) {
+              Java.perform(doJavaHook);
+            }
+          },
+        });
+      }
+    },
   });
 }
+
+function doJavaHook() {
+  const Application = Java.use("android.app.Application");
+  Application.attach.overload("android.content.Context").implementation = function (context) {
+    this.attach(context);
+    const classLoader = context.getClassLoader();
+    classFactory = Java.ClassFactory.get(classLoader);
+  };
+  if (classFactory) {
+    console.log("[with shell]");
+  } else {
+    classFactory = Java;
+    console.log("[without shell]");
+  }
+  sslUnpinning();
+}
+
+function hook_init_proc() {
+  const linker = (Process.pointerSize == 8) ? Process.findModuleByName("linker64") : Process.findModuleByName("linker");
+  if (linker) {
+    // hook call_constructors 函数
+    const symbols = linker.enumerateSymbols();
+    for (const symbol of symbols) {
+      if (symbol.name.includes("call_constructors")) {
+        Interceptor.attach(symbol.address, {
+          onEnter: function (_args) {
+            if (!alreadyHook) {
+              const targetSo = Process.findModuleByName(targetLib);
+              if (targetSo) {
+                hook_before_init_proc(targetSo);
+                alreadyHook = true;
+              }
+            }
+          }
+        });
+        break;
+      }
+    }
+  }
+}
+
+function hook_before_init_proc(targetSo) {
+  const baseAddr = targetSo.base;
+  console.log("targetSo.base: " + baseAddr);
+
+  // 获取函数hook之前的前8个字节
+  // const xxxPtr = Module.findExportByName("libc.so", "xxx");
+  // console.log(`access first 8 bytes before hook: ${hexdump(xxxPtr, {
+  //   offset: 0,
+  //   length: 8,
+  //   header: true,
+  //   ansi: true
+  // })}`);
+
+  // 分析前先注释掉这里
+  nop(baseAddr, 0x1C544);
+  nop(baseAddr, 0x1B8D4);
+  nop(baseAddr, 0x26E5C);
+
+  generalBypassHook();
+
+  // 分析前先打开这里 注释掉上面
+  // hook pthread_create 函数
+  // Interceptor.attach(Module.findExportByName("libc.so", "pthread_create"), {
+  //   onEnter(args) {
+  //     const threadFuncAddr = args[2];
+  //     console.log("The thread function address is " + ptr(threadFuncAddr).sub(baseAddr));
+  //   }
+  // });
+
+  /*
+  [dylib open]:  /system/framework/oat/arm64/org.apache.http.legacy.odex
+  [dylib open]:  /data/app/~~Hu9R_ySuFoCUOt4uZED-ig==/cn.soulapp.android-V18oODwiM_xA47Z6dBWmaQ==/oat/arm64/base.odex
+  [dylib open]:  /data/app/~~Hu9R_ySuFoCUOt4uZED-ig==/cn.soulapp.android-V18oODwiM_xA47Z6dBWmaQ==/lib/arm64/libmmkv.so
+  [dylib open]:  /data/app/~~Hu9R_ySuFoCUOt4uZED-ig==/cn.soulapp.android-V18oODwiM_xA47Z6dBWmaQ==/lib/arm64/libsoul-analytics.so
+  [dylib open]:  /data/app/~~Hu9R_ySuFoCUOt4uZED-ig==/cn.soulapp.android-V18oODwiM_xA47Z6dBWmaQ==/lib/arm64/libapminsighta.so
+  [dylib open]:  /data/app/~~Hu9R_ySuFoCUOt4uZED-ig==/cn.soulapp.android-V18oODwiM_xA47Z6dBWmaQ==/lib/arm64/libfdsan.so
+  [dylib open]:  /data/app/~~Hu9R_ySuFoCUOt4uZED-ig==/cn.soulapp.android-V18oODwiM_xA47Z6dBWmaQ==/lib/arm64/libvolc_log.so
+  [dylib open]:  /data/app/~~Hu9R_ySuFoCUOt4uZED-ig==/cn.soulapp.android-V18oODwiM_xA47Z6dBWmaQ==/lib/arm64/libmsaoaidsec.so
+  targetSo.base: 0x787018f000
+  The thread function address is 0x78701ab544     // sub_1C544
+  The thread function address is 0x78701aa8d4     // sub_1B8D4
+  The thread function address is 0x78701b5e5c     // sub_26E5C
+  */
+}
+
+
+function nop(base, offset) {
+  Interceptor.replace(base.add(offset), new NativeCallback(function () {
+    console.log(`thread func sub_${offset.toString(16).toUpperCase()} noped`)
+  }, 'void', []));
+}
+
+function generalBypassHook() {
+  // hook fgets 函数
+  const fgetsPtr = Module.findExportByName("libc.so", 'fgets');
+  const fgets = new NativeFunction(fgetsPtr, 'pointer', ['pointer', 'int', 'pointer']);
+  Interceptor.replace(fgetsPtr, new NativeCallback(function (buffer, size, fp) {
+    const retval = fgets(buffer, size, fp);
+    const bufstr = Memory.readUtf8String(buffer);
+    if (bufstr.includes("TracerPid:")) {
+      Memory.writeUtf8String(buffer, "TracerPid:\t0");
+      console.log("tracerpid replaced: " + Memory.readUtf8String(buffer));
+    }
+    return retval;
+  }, 'pointer', ['pointer', 'int', 'pointer']));
+
+  // hook strstr 函数
+  const strstrPtr = Module.findExportByName("libc.so", 'strstr');
+  Interceptor.attach(strstrPtr, {
+    onEnter: function (args) {
+      const keyWord = args[1].readCString();
+      if (
+        keyWord.includes("frida") ||
+        keyWord.includes(":69A2") ||
+        keyWord.includes("gum-js") ||
+        keyWord.includes("REJECT") ||
+        keyWord.includes("gmain") ||
+        keyWord.includes("gdbus") ||
+        keyWord.includes("linjector")
+      ) {
+        this.isCheck = true;
+      }
+    },
+    onLeave: function (retval) {
+      if (this.isCheck) {
+        retval.replace(0);
+      }
+    }
+  });
+
+  // hook access 函数
+  const accessPtr = Module.findExportByName("libc.so", 'access');
+  Interceptor.attach(accessPtr, {
+    onEnter: function (args) {
+      const path = args[0].readCString();
+      if (
+        path.includes("re.frida.server") ||
+        path.includes("/data/local/tmp")
+      ) {
+        this.isCheck = true;
+      }
+    },
+    onLeave: function (retval) {
+      if (this.isCheck) {
+        retval.replace(-1);
+      }
+    },
+  });
+}
+
+setImmediate(main);
 
 function sslUnpinning() {
   customInit();
@@ -108,7 +282,8 @@ function customInit() {
     try {
       SSLContext.init.overload('[Ljavax.net.ssl.KeyManager;', '[Ljavax.net.ssl.TrustManager;', 'java.security.SecureRandom').implementation = function (km, _tm, random) {
         console.log("javax.net.ssl.SSLContext.init('[Ljavax.net.ssl.KeyManager;', '[Ljavax.net.ssl.TrustManager;', 'java.security.SecureRandom') called");
-        this.init(km, customTrustManagers(), random);
+        // this.init(km, customTrustManagers(), random);
+        this.init(null, customTrustManagers(), null);
       }
     } catch (err) {
       console.error(err.message);
@@ -187,6 +362,15 @@ function hookAndroidStuff() {
       return customArrayList();
     };
   }
+
+  const targetWVC = "android.webkit.WebViewClient";
+  const [WebViewClientExists, WebViewClient] = classExists(targetWVC);
+  if (WebViewClientExists) {
+    WebViewClient.onReceivedSslError.implementation = function (_view, handler, _error) {
+      console.log(classFactory.use("java.lang.Throwable").$new().getStackTrace());
+      handler.proceed();
+    };
+  }
 }
 
 function hookOkHttp() {
@@ -250,6 +434,8 @@ function hookOkHttp() {
       return classFactory.retain(this);
     };
 
+    // okhttp3.CertificatePinner 的 check 方法
+    // okhttp3.internal.tls.OkHostnameVerifier 的 verify 方法
   }
 }
 
@@ -293,6 +479,180 @@ function hookConscrypt() {
       };
     } catch (err) {
       console.error(err.message);
+    }
+  }
+
+  const targetOSSFI = "com.android.org.conscrypt.OpenSSLSocketFactoryImpl";
+  const [OpenSSLSocketFactoryImplExists, OpenSSLSocketFactoryImpl] = classExists(targetOSSFI);
+  if (OpenSSLSocketFactoryImplExists) {
+    const createSocketOverloads = OpenSSLSocketFactoryImpl.createSocket.overloads;
+    const Modifier = classFactory.use("java.lang.reflect.Modifier");
+    for (const createSocket of createSocketOverloads) {
+      createSocket.implementation = function () {
+        console.log(`com.android.org.conscrypt.OpenSSLSocketFactoryImpl.createSocket(${createSocket.argumentTypes}) called`);
+        // console.log(classFactory.use("java.lang.Throwable").$new().getStackTrace());
+        const stackTraceElements = classFactory.use("java.lang.Throwable").$new().getStackTrace();
+        for (const stElement of stackTraceElements) {
+          const stElementClassName = stElement.getClassName();
+
+          if (searchedPackages.has(stElementClassName)) {
+            continue;
+          }
+          searchedPackages.add(stElementClassName);
+
+          const stElementClass = classFactory.use(stElementClassName);
+          if (stElementClass.class.getSuperclass().getName() === "java.lang.Object") {
+            continue;
+          }
+
+          const stElementClassFields = stElementClass.class.getDeclaredFields();
+
+          let fieldsFinalListCount = 0;
+          let fieldsSocketCount = 0;
+          let fieldsIntCount = 0;
+          let fieldsBooleanCount = 0;
+          let fieldsLongCount = 0;
+
+          for (const stElementClassField of stElementClassFields) {
+            // console.log(stElementClassField.getName());
+            const stElementClassFieldModifiers = stElementClassField.getModifiers();
+            const stElementClassFieldIsStatic = Modifier.isStatic(stElementClassFieldModifiers);
+            if (stElementClassFieldIsStatic) {
+              continue;
+            }
+            const stElementClassFieldType = stElementClassField.getType().getName();
+            const stElementClassFieldIsFinal = Modifier.isFinal(stElementClassFieldModifiers);
+            if (stElementClassFieldIsFinal) {
+              if (stElementClassFieldType === "java.util.List") {
+                fieldsFinalListCount++;
+              } else {
+                continue;
+              }
+            }
+
+            if (stElementClassFieldType === "java.net.Socket") {
+              fieldsSocketCount++;
+            } else if (stElementClassFieldType === "int") {
+              fieldsIntCount++;
+            } else if (stElementClassFieldType === "boolean") {
+              fieldsBooleanCount++;
+            } else if (stElementClassFieldType === "long") {
+              fieldsLongCount++;
+            }
+          }
+
+          if (fieldsFinalListCount != 1) {
+            continue;
+          }
+
+          if (fieldsSocketCount != 2) {
+            continue;
+          }
+
+          if (fieldsBooleanCount != 1) {
+            continue;
+          }
+
+          if (fieldsLongCount != 1) {
+            continue;
+          }
+
+          if (fieldsIntCount != 2 && fieldsIntCount != 4) {
+            continue;
+          }
+
+          const stElementClassConstructors = stElementClass.class.getDeclaredConstructors();
+          if (stElementClassConstructors.length != 1) {
+            continue;
+          }
+
+          const stElementClassConstructor = stElementClassConstructors[0];
+          const stElementClassConstructorParameterTypes = stElementClassConstructor.getParameterTypes();
+          if (stElementClassConstructorParameterTypes.length != 2) {
+            continue;
+          }
+
+          // 可能是 okhttp 中的 RealConnection 类
+          const classRealConnection = stElementClassName;
+          console.log("[class find] maybe okhttp RealConnection: ", classRealConnection);
+
+          // 可能是 okhttp 中的 Route 类
+          const classRoute = stElementClassConstructorParameterTypes[1].getName();
+          console.log("[class find] maybe okhttp Route: ", classRoute);
+          const classRouteConstructors = classFactory.use(classRoute).class.getDeclaredConstructors();
+          if (classRouteConstructors.length != 1) {
+            continue;
+          }
+          const classRouteConstructor = classRouteConstructors[0];
+          const classRouteConstructorParameterTypes = classRouteConstructor.getParameterTypes();
+          if (classRouteConstructorParameterTypes.length != 3) {
+            continue;
+          }
+
+          // 可能是 okhttp 中的 Address 类
+          const classAddress = classRouteConstructorParameterTypes[0].getName();
+          console.log("[class find] maybe okhttp Address: ", classAddress);
+          const Address = classFactory.use(classAddress);
+          const classAddressConstructors = Address.class.getDeclaredConstructors();
+          if (classAddressConstructors.length != 1) {
+            continue;
+          }
+          const classAddressConstructor = classAddressConstructors[0];
+          const classAddressConstructorParameterTypes = classAddressConstructor.getParameterTypes();
+          if (classAddressConstructorParameterTypes.length != 12) {
+            continue;
+          }
+
+          Address.$init.implementation = function (
+            uriHost, uriPort, dns, socketFactory, sslSocketFactory,
+            hostnameVerifier, certificatePinner, authenticator,
+            proxy, protocols, connectionSpecs, proxySelector
+          ) {
+            const classHostnameVerifier = classAddressConstructorParameterTypes[5].getName();
+            if (classHostnameVerifier !== "javax.net.ssl.HostnameVerifier") {
+              console.log("[class find] maybe HostnameVerifier: ", classHostnameVerifier);
+            }
+            // TODO: hook HostnameVerifier
+
+            return this.$init(
+              uriHost, uriPort, dns, socketFactory, sslSocketFactory,
+              hostnameVerifier, certificatePinner, authenticator,
+              proxy, protocols, connectionSpecs, proxySelector
+            );
+          };
+
+          // 可能是 okhttp 中的 CertificatePinner 类
+          const classCertificatePinner = classAddressConstructorParameterTypes[6].getName();
+          console.log("[class find] maybe okhttp CertificatePinner: ", classCertificatePinner);
+          const CertificatePinner = classFactory.use(classCertificatePinner);
+          const classCertificatePinnerMethods = CertificatePinner.class.getDeclaredMethods();
+          for (const classCertificatePinnerMethod of classCertificatePinnerMethods) {
+            const methodReturnType = classCertificatePinnerMethod.getReturnType().getName();
+            if (methodReturnType !== "void") {
+              continue;
+            }
+            const methodParameterTypes = classCertificatePinnerMethod.getParameterTypes();
+            if (methodParameterTypes.length != 2) {
+              continue;
+            }
+            const methodParameterType0 = methodParameterTypes[0].getName();
+            const methodParameterType1 = methodParameterTypes[1].getName();
+            if (methodParameterType0 !== "java.lang.String") {
+              continue;
+            }
+            if (methodParameterType1 !== "java.util.List") {
+              continue;
+            }
+            const checkMethod = classCertificatePinnerMethod.getName();
+            console.log("[class find] maybe okhttp CertificatePinner check method: ", checkMethod);
+            // hook CertificatePinner check method
+            CertificatePinner[checkMethod].overload('java.lang.String', 'java.util.List').implementation = function (_hostname, _certificates) {
+              console.log("okhttp CertificatePinner check('java.lang.String', 'java.util.List') called");
+            };
+          }
+        }
+        return createSocket.apply(this, arguments);
+      }
     }
   }
 }
@@ -396,5 +756,3 @@ function hookChBoye() {
     }
   }
 }
-
-setImmediate(main);
