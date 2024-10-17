@@ -6,6 +6,7 @@ let classFactory = null;
 // To see where this was allocated, set the OkHttpClient logger level to FINE
 // d.a.f.e
 // okhttp3.internal.platform.Platform
+// 或者结合脚本运行后的输出辅助搜索
 
 // const okHttpPackageName = "nl";
 const okHttpPackageName = "okhttp3";
@@ -46,8 +47,8 @@ function sslUnpinning() {
 
   hookJavaStuff();
   hookAndroidStuff();
-  hookConscrypt();
   hookOkHttp();
+  hookConscrypt();
   hookApacheHttp();
   hookAppcelerator();
   hookXutils();
@@ -449,9 +450,9 @@ function hookConscrypt() {
             const classHostnameVerifier = classAddressConstructorParameterTypes[5].getName();
             if (classHostnameVerifier !== "javax.net.ssl.HostnameVerifier") {
               console.log("[class find] maybe HostnameVerifier: ", classHostnameVerifier);
-            }            
+            }
             // TODO: hook HostnameVerifier
-            
+
             return this.$init(
               uriHost, uriPort, dns, socketFactory, sslSocketFactory,
               hostnameVerifier, certificatePinner, authenticator,
