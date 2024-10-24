@@ -61,6 +61,7 @@ if __name__ == '__main__':
   else:
     os.makedirs(package_name)    
 
+  # process = frida.get_device_manager().add_remote_device('192.168.x.x:xxxx').attach('com.example.app')
   device = frida.get_usb_device()
   pid = device.spawn(package_name)
   process = device.attach(pid)
