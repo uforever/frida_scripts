@@ -57,3 +57,5 @@ if __name__ == '__main__':
     print(script.exports_sync.func0("roysue"))
     print(script.exports_sync.func1("r0syue"))
     print(script.exports_sync.func2("requestUserInfo"))
+
+    process.detach()
