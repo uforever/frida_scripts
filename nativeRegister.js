@@ -45,17 +45,19 @@ function main() {
     if (export_func.name.includes("RegisterNativeMethod")) {
       console.log(JSON.stringify(export_func));
       Interceptor.attach(export_func.address, {
-        onEnter: function(args) {
+        onEnter: function (args) {
           const methodName = prettyMethod(args[1], true);
           const retvalType = methodName.split(' ')[0];
           if (methodName.includes(PKG_NAME)) {
-            console.log(`RegisterNativeMethod: ${methodName}, address: ${args[2]}`);
+            const module = Process.findModuleByAddress(args[2]);
+            const offset = args[2].sub(module.base);
+            console.log(`\n[!] RegisterNativeMethod\n- method: ${methodName}\n- offset: ${offset}`);
             Interceptor.attach(args[2], {
-              onLeave: function(retval) {
+              onLeave: function (retval) {
                 if (retvalType === 'int') {
-                  console.log(`[RETURN] ${methodName}\nretval: ${retval}`);
+                  console.log(`\n[*] Leave NativeMethod ${methodName}\n- retval: ${retval}`);
                 } else if (retvalType === 'java.lang.String') {
-                  console.log(`[RETURN] ${methodName}\nretval: ${Java.cast(retval, Java.use('java.lang.String'))}`);
+                  console.log(`\n[*] Leave NativeMethod ${methodName}\n- retval: ${Java.cast(retval, Java.use('java.lang.String'))}`);
                 }
               },
             });
