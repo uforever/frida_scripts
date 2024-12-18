@@ -1,8 +1,11 @@
 // frida -U -f com.example.androiddemo -l mTracer.js -o trace.log
 // frida -U -F -l mTracer.js -o trace.log
+// 需要注意的是 enumerateLoadedClasses 枚举当前加载的类 可能不全
+// 最好等相关功能执行后 再进行hook
 
 const allowList = "com.example.demo";
-const denyList = null;
+// const denyList = null; // 为空时不进行过滤
+const denyList = "$"; // 忽略内部类
 const showCallStack = false;
 
 // 带样式输出并保存日志
@@ -63,7 +66,7 @@ const styleLog = function(styleName, message) {
 };
 
 // hook Java 函数
-const hookJavaMethod = function(methodName, targetClass) {
+const hookJavaMethod = function(methodName, targetClass, className) {
   const overloads = targetClass[methodName].overloads;
   // 遍历hook所有重载方法
   for (const overload of overloads) {
@@ -72,7 +75,7 @@ const hookJavaMethod = function(methodName, targetClass) {
 
       // 打印 参数、调用栈、返回值
       const methodSign = overload.toString();
-      styleLog('magenta', `\n-------- ${methodSign} ----------`);
+      styleLog('magenta', `\n-------- ${methodSign.replace("function ", className + ".")} ----------`);
       styleLog('magenta', `[arguments]:`);
       for (const arg of arguments) {
         styleLog('magenta', `  - ${JSON.stringify(arg)}`);
@@ -82,8 +85,6 @@ const hookJavaMethod = function(methodName, targetClass) {
         styleLog('magenta', `[call stack]:\n${callStack}`);
       }
       styleLog('magenta', `[return value]:\n${JSON.stringify(retval, null, 2)}`);
-      styleLog('magenta', `\n-------- ${'-'.repeat(methodSign.length)} ----------`);
-
       return retval;
     };
   }
@@ -114,7 +115,7 @@ const hookJavaClass = function(className, classFactory) {
   styleLog('green', `\n-------- ${'-'.repeat(className.length)} ----------`);
 
   for (const methodName of methodNames) {
-    hookJavaMethod(methodName, targetClass);
+    hookJavaMethod(methodName, targetClass, className);
   }
 }
 
@@ -175,7 +176,7 @@ const hook = function(allowList, denyList) {
 const main = function() {
   styleLog('white', '\n-------- Start tracing --------');
   // hook -> hookAndroid -> hookJavaClass -> hookJavaMethod
-  hook(allowList, denyList);
+  hook(allowList, denyList); // 手动执行这条命令
 };
 
 setImmediate(main);
