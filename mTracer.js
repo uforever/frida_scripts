@@ -3,13 +3,13 @@
 // 需要注意的是 enumerateLoadedClasses 枚举当前加载的类 可能不全
 // 最好等相关功能执行后 再进行hook
 
-const allowList = "com.example.demo";
+const allowList = "com.zj.wuaipojie2023_1";
 // const denyList = null; // 为空时不进行过滤
 const denyList = "$"; // 忽略内部类
 const showCallStack = false;
 
 // 带样式输出并保存日志
-const styleLog = function(styleName, message) {
+const styleLog = function (styleName, message) {
   const styles = {
     // text color
     'black': '\x1b[30m',
@@ -66,11 +66,13 @@ const styleLog = function(styleName, message) {
 };
 
 // hook Java 函数
-const hookJavaMethod = function(methodName, targetClass, className) {
-  const overloads = targetClass[methodName].overloads;
+// Java.perform(function () { hookJavaMethod("areEqual", null,"kotlin.jvm.internal.Intrinsics"); });
+const hookJavaMethod = function (methodName, targetClass, className) {
+  const target = targetClass || Java.use(className);
+  const overloads = target[methodName].overloads;
   // 遍历hook所有重载方法
   for (const overload of overloads) {
-    overload.implementation = function() {
+    overload.implementation = function () {
       const retval = overload.apply(this, arguments);
 
       // 打印 参数、调用栈、返回值
@@ -78,20 +80,25 @@ const hookJavaMethod = function(methodName, targetClass, className) {
       styleLog('magenta', `\n-------- ${methodSign.replace("function ", className + ".")} ----------`);
       styleLog('magenta', `[arguments]:`);
       for (const arg of arguments) {
-        styleLog('magenta', `  - ${JSON.stringify(arg)}`);
+        // styleLog('magenta', `  - ${JSON.stringify(arg)}`);
+        styleLog('magenta', `  - ${arg.toString()}`);
       }
       if (showCallStack) {
         const callStack = Java.use("android.util.Log").getStackTraceString(Java.use("java.lang.Throwable").$new());
         styleLog('magenta', `[call stack]:\n${callStack}`);
       }
-      styleLog('magenta', `[return value]:\n${JSON.stringify(retval, null, 2)}`);
+      // styleLog('magenta', `[return value]:\n${JSON.stringify(retval, null, 2)}`);
+      if (retval !== undefined) {
+        styleLog('magenta', `[return value]:\n${retval.toString()}`);
+      }
       return retval;
     };
   }
 }
 
 // hook Java 类
-const hookJavaClass = function(className, classFactory) {
+// Java.perform(function () { hookJavaClass("kotlin.jvm.internal.Intrinsics", Java); });
+const hookJavaClass = function (className, classFactory) {
   styleLog('green', `\n-------- ${className} ----------`);
   const targetClass = classFactory.use(className);
   const targetClazz = targetClass.class;
@@ -99,7 +106,7 @@ const hookJavaClass = function(className, classFactory) {
   const constructors = targetClazz.getDeclaredConstructors();
 
   // 方法名去重
-  const methodNames = new Set(methods.map(function(method) {
+  const methodNames = new Set(methods.map(function (method) {
     styleLog('green', method.toString());
     return method.getName();
   }));
@@ -120,30 +127,30 @@ const hookJavaClass = function(className, classFactory) {
 }
 
 // hook安卓
-const hookAndroid = function(allowList, denyList) {
-  Java.perform(function() {
+const hookAndroid = function (allowList, denyList) {
+  Java.perform(function () {
     styleLog('cyan', '\n-------- Hooking Android --------');
 
     // 找到满足要求的全部类并输出
     let targetClasses = new Array();
     Java.enumerateLoadedClasses({
-      onMatch: function(name, _handle) {
+      onMatch: function (name, _handle) {
         if (name.includes(allowList) && !name.includes(denyList)) {
           targetClasses.push(name);
         }
       },
-      onComplete: function() { } // 必须加 不然会报错
+      onComplete: function () { } // 必须加 不然会报错
     });
     styleLog('cyan', `Found ${targetClasses.length} target classes:`);
-    targetClasses.forEach(function(name) {
+    targetClasses.forEach(function (name) {
       styleLog('cyan', `  - ${name}`);
     });
 
     // 遍历全部ClassLoader批量hook Java类
     Java.enumerateClassLoaders({
-      onMatch: function(loader) {
+      onMatch: function (loader) {
         const classFactory = Java.ClassFactory.get(loader);
-        targetClasses = targetClasses.filter(function(name) {
+        targetClasses = targetClasses.filter(function (name) {
           try {
             if (loader.findClass(name)) {
               // hook单个Java类
@@ -154,16 +161,16 @@ const hookAndroid = function(allowList, denyList) {
           return true;
         });
       },
-      onComplete: function() { },
+      onComplete: function () { },
     });
   });
 };
 
-const hookIOS = function(_allowList, _denyList) {
+const hookIOS = function (_allowList, _denyList) {
   styleLog('red', 'Error: iOS hooking is not supported yet!');
 };
 
-const hook = function(allowList, denyList) {
+const hook = function (allowList, denyList) {
   if (Java.available) {
     hookAndroid(allowList, denyList);
   } else if (ObjC.available) {
@@ -173,10 +180,10 @@ const hook = function(allowList, denyList) {
   }
 };
 
-const main = function() {
+const main = function () {
   styleLog('white', '\n-------- Start tracing --------');
   // hook -> hookAndroid -> hookJavaClass -> hookJavaMethod
-  hook(allowList, denyList); // 手动执行这条命令
+  // hook(allowList, denyList); // 手动执行这条命令
 };
 
 setImmediate(main);
