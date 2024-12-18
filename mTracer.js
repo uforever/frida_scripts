@@ -2,9 +2,6 @@
 // frida -U -F -l mTracer.js -o trace.log
 
 const allowList = "com.example.demo";
-const denyList = null;
-const showCallStack = false;
-
 // 带样式输出并保存日志
 const styleLog = function(styleName, message) {
   const styles = {
@@ -72,7 +69,7 @@ const hookJavaMethod = function(methodName, targetClass) {
 
       // 打印 参数、调用栈、返回值
       const methodSign = overload.toString();
-      styleLog('magenta', `-------- ${methodSign} ----------`);
+      styleLog('magenta', `\n-------- ${methodSign} ----------`);
       styleLog('magenta', `[arguments]:`);
       for (const arg of arguments) {
         styleLog('magenta', `  - ${JSON.stringify(arg)}`);
@@ -82,7 +79,7 @@ const hookJavaMethod = function(methodName, targetClass) {
         styleLog('magenta', `[call stack]:\n${callStack}`);
       }
       styleLog('magenta', `[return value]:\n${JSON.stringify(retval, null, 2)}`);
-      styleLog('magenta', `-------- ${'-'.repeat(methodSign.length)} ----------`);
+      styleLog('magenta', `\n-------- ${'-'.repeat(methodSign.length)} ----------`);
 
       return retval;
     };
@@ -91,7 +88,7 @@ const hookJavaMethod = function(methodName, targetClass) {
 
 // hook Java 类
 const hookJavaClass = function(className, classFactory) {
-  styleLog('green', `-------- ${className} ----------`);
+  styleLog('green', `\n-------- ${className} ----------`);
   const targetClass = classFactory.use(className);
   const targetClazz = targetClass.class;
   const methods = targetClazz.getDeclaredMethods();
@@ -111,7 +108,7 @@ const hookJavaClass = function(className, classFactory) {
     }
   }
 
-  styleLog('green', `-------- ${'-'.repeat(className.length)} ----------`);
+  styleLog('green', `\n-------- ${'-'.repeat(className.length)} ----------`);
 
   for (const methodName of methodNames) {
     hookJavaMethod(methodName, targetClass);
@@ -121,7 +118,7 @@ const hookJavaClass = function(className, classFactory) {
 // hook安卓
 const hookAndroid = function(allowList, denyList) {
   Java.perform(function() {
-    styleLog('white', '-------- Hooking Android --------');
+    styleLog('cyan', '\n-------- Hooking Android --------');
 
     // 找到满足要求的全部类并输出
     let targetClasses = new Array();
@@ -173,7 +170,7 @@ const hook = function(allowList, denyList) {
 };
 
 const main = function() {
-  styleLog('white', '-------- Start tracing --------');
+  styleLog('white', '\n-------- Start tracing --------');
   // hook -> hookAndroid -> hookJavaClass -> hookJavaMethod
   hook(allowList, denyList);
 };
