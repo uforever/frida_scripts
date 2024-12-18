@@ -2,6 +2,9 @@
 // frida -U -F -l mTracer.js -o trace.log
 
 const allowList = "com.example.demo";
+const denyList = null;
+const showCallStack = false;
+
 // 带样式输出并保存日志
 const styleLog = function(styleName, message) {
   const styles = {
