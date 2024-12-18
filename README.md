@@ -6,7 +6,7 @@
 
 - [基础操作2](sample2.js)
 
-- [trace指定Java类](mTracer.js)
+- [trace对抗控制流混淆](mTracer.js)
 
 - [安卓加密算法自吐](javaCrypto.js)
 
