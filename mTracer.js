@@ -2,8 +2,13 @@
 // frida -U -F -l mTracer.js -o trace.log
 // 需要注意的是 enumerateLoadedClasses 枚举当前加载的类 可能不全
 // 最好等相关功能执行后 再进行hook
-
-const allowList = "com.zj.wuaipojie2023_1";
+// 按名包进行hook: 白名单 黑名单(null表示不过滤 "$"表示跳过内部类)
+// hook("com.example.androiddemo", null);
+// 按类名进行hook: 类名 classFactory(一般用Java就行)
+// Java.perform(function () { hookJavaClass("kotlin.jvm.internal.Intrinsics", Java); });
+// 指定类名和函数名进行hook: 函数名 null 类名
+// Java.perform(function () { hookJavaMethod("areEqual", null, "kotlin.jvm.internal.Intrinsics"); });
+const allowList = "com.example.androiddemo";
 // const denyList = null; // 为空时不进行过滤
 const denyList = "$"; // 忽略内部类
 const showCallStack = false;
