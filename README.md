@@ -49,3 +49,7 @@
 - [**综合利用**](mixUse.js)
 
 - [事件监听器](eventWatcher.js)
+
+- [RPC简单示例](rpc.py)
+
+- [RPC暴露为HTTP服务示例](rpc2server.py)
