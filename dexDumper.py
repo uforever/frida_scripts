@@ -23,6 +23,8 @@ const sizeSet = new Set();
 const pointerSize = Process.pointerSize;
 
 function dumpDexFile(dexFilePtr) {
+  // 每个地址只调用一次 不一定正确
+  // 有可能函数回填后地址相同 有需要的话可能得验证一下
   const addressString = dexFilePtr.toString();
   if (dexFilePtrSet.has(addressString)) {
     return;
@@ -33,7 +35,6 @@ function dumpDexFile(dexFilePtr) {
     return;
   }
 
-  // try {
   const base = dexFilePtr.add(pointerSize).readPointer();
   const size = dexFilePtr.add(pointerSize * 2).readUInt();
 
@@ -42,56 +43,68 @@ function dumpDexFile(dexFilePtr) {
     return;
   }
 
+  // 比较 DexFile 对象的 size 和 dex 文件二进制中的 file_size 是否相等
   const sizeBytes = dexFilePtr.add(pointerSize * 2).readByteArray(4);
   const fileSizeBytes = base.add(0x20).readByteArray(4);
 
-  if (
-    sizeBytes[0] !== fileSizeBytes[0] ||
-    sizeBytes[1] !== fileSizeBytes[1] ||
-    sizeBytes[2] !== fileSizeBytes[2] ||
-    sizeBytes[3] !== fileSizeBytes[3]
-  ) {
+  if (sizeBytes[0] !== fileSizeBytes[0]) return;
+  if (sizeBytes[1] !== fileSizeBytes[1]) return;
+  if (sizeBytes[2] !== fileSizeBytes[2]) return;
+  if (sizeBytes[3] !== fileSizeBytes[3]) return;
+
+  // 相同大小只调用一次
+  if (sizeSet.has(size)) {
     return;
   }
+  sizeSet.add(size);
 
-  // if (sizeSet.has(size)) {
-  //   return;
-  // }
-  // sizeSet.add(size);
+  console.log(`\\n[*] Dump DexFile\\n- base: ${base}\\n- length: ${size}`);
 
-  console.log(`[*] Dump DexFile - base: ${base}, length: ${size}.`)
   const data = base.readByteArray(size);
   send(size, data);
-
-  // } catch (err) {
-  //   console.error(err);
-  // }
 }
 
 function main() {
   Java.perform(doJavaHook);
 
-  const libart = Module.enumerateSymbols("libart.so");
+  // adb pull /apex/com.android.art/lib64/libart.so
+  const libart = Process.findModuleByName("libart.so");
+  const libartSymbols = Module.enumerateSymbols("libart.so");
 
-  for (const item of libart) {
-    if (!item.name.includes("DexFile")) {
+  for (const symbol of libartSymbols) {
+    if (!symbol.name.includes("DexFile")) {
       continue;
     }
-    if (item.name.includes("LoadMethod")) {
-      console.log(JSON.stringify(item));
-      const targetFuncAddr = item.address;
+
+    if (!symbol.name.includes("ClassLinker")) {
+      continue;
+    }
+
+    // 下面两个函数就先不hook了
+    if (symbol.name.includes("RegisterDexFileLocked")) {
+      continue;
+    }
+    if (symbol.name.includes("RegisterDexFiles")) {
+      continue;
+    }
+
+    // if (symbol.name.includes("LoadMethod")) {
+    //   console.log(`\\n[!] Function hooked\\n- name: ${symbol.name}\\n- offset: ${symbol.address.sub(libart.base)}`);
+    //   const targetFuncAddr = symbol.address;
+    //   Interceptor.attach(targetFuncAddr, {
+    //     onEnter: function (args) {
+    //       const dexFilePtr = ptr(args[1]);
+    //       dumpDexFile(dexFilePtr);
+    //     },
+    //   });
+    // }
+
+    if (symbol.name.includes("RegisterDexFile")) {
+      console.log(`\\n[!] Function hooked\\n- name: ${symbol.name}\\n- offset: ${symbol.address.sub(libart.base)}`);
+      const targetFuncAddr = symbol.address;
       Interceptor.attach(targetFuncAddr, {
         onEnter: function (args) {
           const dexFilePtr = ptr(args[1]);
-          dumpDexFile(dexFilePtr);
-        },
-      });
-    } else if (item.name.includes("LoadClass")) {
-      console.log(JSON.stringify(item));
-      const targetFuncAddr = item.address;
-      Interceptor.attach(targetFuncAddr, {
-        onEnter: function (args) {
-          const dexFilePtr = ptr(args[2]);
           dumpDexFile(dexFilePtr);
         },
       });
@@ -100,25 +113,21 @@ function main() {
 }
 
 function doJavaHook() {
-  const DexPathList = Java.use("dalvik.system.DexPathList");
-  console.log("DexPathList hooked");
+  // const DexPathList = Java.use("dalvik.system.DexPathList");
+  // DexPathList.$init.overload('java.lang.ClassLoader', 'java.lang.String', 'java.lang.String', 'java.io.File', 'boolean').implementation = function (definingContext, dexPath, librarySearchPath, optimizedDirectory, isTrusted) {
+  //   console.log(`\\n[*] dalvik.system.DexPathList.$init called\\n- dexPath: ${dexPath}`);
+  //   return this.$init(definingContext, dexPath, librarySearchPath, optimizedDirectory, isTrusted);
+  // }
 
-  DexPathList.loadDexFile.implementation = function (file, optimizedDirectory, loader, elements) {
-    const retval = this.loadDexFile(file, optimizedDirectory, loader, elements);
-
-    const mCookie = retval.mCookie.value;
-    const Array = Java.use("java.lang.reflect.Array");
-    const size = Array.getLength(mCookie);
-
-    console.log(`[*] DexFile from ${retval.mCookie.holder}`);
-
-    for (let i = 0; i < size; i++) {
-      const longValue = Array.getLong(mCookie, i);
-      const dexFilePtr = ptr(longValue);
-      dumpDexFile(dexFilePtr);
-    }
-    return retval;
+  // hook 下面这个就够了
+  const DexFile = Java.use("dalvik.system.DexFile");
+  DexFile.openDexFileNative.implementation = function (sourceName, outputName, flags, loader, elements) {
+    console.log(`\\n[*] dalvik.system.DexFile.openDexFileNative called\\n- sourceName: ${sourceName}`);
+    return this.openDexFileNative(sourceName, outputName, flags, loader, elements);
   }
+
+  // console.log("\\n[!] Java function hooked\\n- dalvik.system.DexPathList.$init()\\n+ dalvik.system.DexFile.openDexFileNative()");
+  console.log("\\n[!] Java function hooked\\n+ dalvik.system.DexFile.openDexFileNative()");
 }
 
 setImmediate(main);
@@ -147,7 +156,7 @@ if __name__ == '__main__':
 
     script = process.create_script(jscode)
     script.on('message', on_message)
-    print('[*] Running DexDumper')
+    print('Running DexDumper')
     script.load()
 
     time.sleep(2)
