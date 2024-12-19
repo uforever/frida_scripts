@@ -83,17 +83,18 @@ const hookJavaMethod = function (methodName, targetClass, className) {
       // 打印 参数、调用栈、返回值
       const methodSign = overload.toString();
       styleLog('magenta', `\n-------- ${methodSign.replace("function ", className + ".")} ----------`);
-      styleLog('magenta', `[arguments]:`);
+      if (arguments.length > 0) styleLog('magenta', `[arguments]:`);
       for (const arg of arguments) {
         // styleLog('magenta', `  - ${JSON.stringify(arg)}`);
         styleLog('magenta', `  - ${arg.toString()}`);
       }
+
       if (showCallStack) {
         const callStack = Java.use("android.util.Log").getStackTraceString(Java.use("java.lang.Throwable").$new());
         styleLog('magenta', `[call stack]:\n${callStack}`);
       }
       // styleLog('magenta', `[return value]:\n${JSON.stringify(retval, null, 2)}`);
-      if (retval !== undefined) {
+      if (retval !== undefined && retval !== null) {
         styleLog('magenta', `[return value]:\n${retval.toString()}`);
       }
       return retval;
@@ -123,8 +124,6 @@ const hookJavaClass = function (className, classFactory) {
       styleLog('green', constructor.toString());
     }
   }
-
-  styleLog('green', `\n-------- ${'-'.repeat(className.length)} ----------`);
 
   for (const methodName of methodNames) {
     hookJavaMethod(methodName, targetClass, className);
