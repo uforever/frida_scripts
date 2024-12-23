@@ -53,3 +53,5 @@
 - [RPC简单示例](rpc.py)
 
 - [RPC暴露为HTTP服务示例](rpc2server.py)
+
+- [获取so文件init信息](soInitInfo.js)
