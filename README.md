@@ -55,3 +55,5 @@
 - [RPC暴露为HTTP服务示例](rpc2server.py)
 
 - [获取so文件init信息](soInitInfo.js)
+
+- [通用绕过frida检测基础](regularBypass.js)
