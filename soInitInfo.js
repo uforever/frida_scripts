@@ -1,13 +1,21 @@
 // 添加一些不需要hook的so
 const soNameSet = new Set([
   "libandroid.so",
-  "liblog.so",
-  "libm.so",
-  "libdl.so",
   "libc.so",
+  "libc++.so",
+  "libcutils.so",
+  "libgui.so",
+  "libui.so",
+  "libdl.so",
+  "liblog.so",
+  "libutils.so",
+  "libexpat.so",
+  "libm.so",
+  "libperfctl.so",
   "libEGL.so",
   "javalib.odex",
   "system@priv-app@RtMiCloudSDK@RtMiCloudSDK.apk@classes.dex",
+  "android.hardware.graphics.mapper@4.0-impl-mediatek.so",
 ]);
 
 function hookSoInit() {
