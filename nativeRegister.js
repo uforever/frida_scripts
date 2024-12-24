@@ -1,4 +1,4 @@
-const PKG_NAME = "com.example.demo";
+const PKG_NAME = "com.example.demo"; // 需要修改这里
 
 const STD_STRING_SIZE = 3 * Process.pointerSize;
 class StdString {
@@ -43,7 +43,10 @@ function main() {
 
   for (const export_func of libart) {
     if (export_func.name.includes("RegisterNativeMethod")) {
-      console.log(JSON.stringify(export_func));
+      console.log(`
+[+] hook Native Function
+- module: libart.so
+- function: RegisterNativeMethod`);
       Interceptor.attach(export_func.address, {
         onEnter: function (args) {
           const methodName = prettyMethod(args[1], true);
@@ -51,13 +54,20 @@ function main() {
           if (methodName.includes(PKG_NAME)) {
             const module = Process.findModuleByAddress(args[2]);
             const offset = args[2].sub(module.base);
-            console.log(`\n[!] RegisterNativeMethod\n- method: ${methodName}\n- offset: ${offset}`);
+            console.log(`
+[!] RegisterNativeMethod
+- method: ${methodName}
+- offset: ${offset}`);
             Interceptor.attach(args[2], {
               onLeave: function (retval) {
                 if (retvalType === 'int') {
-                  console.log(`\n[*] Leave NativeMethod ${methodName}\n- retval: ${retval}`);
+                  console.log(`
+[*] Leave NativeMethod ${methodName}
+- retval: ${retval}`);
                 } else if (retvalType === 'java.lang.String') {
-                  console.log(`\n[*] Leave NativeMethod ${methodName}\n- retval: ${Java.cast(retval, Java.use('java.lang.String'))}`);
+                  console.log(`
+[*] Leave NativeMethod ${methodName}
+- retval: ${Java.cast(retval, Java.use('java.lang.String'))}`);
                 }
               },
             });
