@@ -2,20 +2,32 @@ const packageName = "com.yimian.envcheck";
 const targetLib = "libtestfrida.so";
 // const fakeMapsPath = `/data/user/0/${packageName}/maps`;
 const fakeMapsPath = `/data/data/${packageName}/maps`;
+// 自动生成重定向maps文件
+// 可能会导致频繁IO 最好手动生成
+const autoGenMaps = true;
 
 // 添加一些不需要hook的so
 const soNameSet = new Set([
   "libandroid.so",
+  "libbase.so",
+  "libopenjdkjvmti.so",
   "libc.so",
   "libc++.so",
   "libcutils.so",
   "libgui.so",
   "libui.so",
   "libdl.so",
+  "libdexfile.so",
   "liblog.so",
   "libutils.so",
   "libexpat.so",
   "libm.so",
+  "libart.so",
+  "libart-compiler.so",
+  "libart-dexlayout.so",
+  "libartbase.so",
+  "libartpalette.so",
+  "libprofile.so",
   "libperfctl.so",
   "libEGL.so",
   "javalib.odex",
@@ -56,11 +68,59 @@ function replaceKeyword(str) {
 
 function hookSoInit() {
   // /system/bin/linker64
-  const linker = (Process.pointerSize == 8) ?
-    Process.findModuleByName("linker64") : Process.findModuleByName("linker");
+  const linker64 = Process.findModuleByName("linker64");
+  if (linker64) {
+    const symbols = linker64.enumerateSymbols();
+    for (const symbol of symbols) {
+      if (symbol.name.includes("call_constructors")) {
+
+        console.log(`
+[+] hook Native Function
+- module: linker64
+- function: call_constructors`);
+
+        Interceptor.attach(symbol.address, {
+          onEnter: function (args) {
+            const soinfo = args[0];
+            // const soNamePtr = soinfo.add(408).readPointer();
+            // const soName = soNamePtr.readCString();
+            const soName = soinfo.add(408).readPointer().readCString();
+
+            if (soName && !soNameSet.has(soName)) {
+              console.log(`[+] soName: ${soName}`);
+              const module = Process.findModuleByName(soName);
+              if (module) {
+                const base = module.base;
+                const initProc = soinfo.add(184).readPointer();
+                const initArray = soinfo.add(152).readPointer();
+                const initArrayCount = soinfo.add(160).readU64();
+
+                const initArrayFuncs = Array.from({ length: initArrayCount }, (_, index) => {
+                  const pointer = initArray.add(8 * index).readPointer();
+                  if (pointer.toString() === "0x0") {
+                    return null;
+                  }
+                  return pointer.sub(base);
+                }).filter(item => item !== null);
+
+                console.log(`
+[*] linker64 call_constructors onEnter
+- so_name: ${soName}
+- init_proc: ${(initProc == 0x0) ? "null" : initProc.sub(base)}
+- init_array: ${(initArray == 0x0) ? "null" : initArray.sub(base)}
+- init_array_count: ${initArrayCount}
+  ${initArrayFuncs.join(', ')}`);
+              }
+            }
+          }
+        });
+      }
+    }
+  }
+
+  const linker = Process.findModuleByName("linker");
   if (linker) {
     const symbols = linker.enumerateSymbols();
-    // void soinfo::call_constructors()
     for (const symbol of symbols) {
       if (symbol.name.includes("call_constructors")) {
 
@@ -72,23 +132,29 @@ function hookSoInit() {
         Interceptor.attach(symbol.address, {
           onEnter: function (args) {
             const soinfo = args[0];
-            const soName = soinfo.add(408).readPointer().readCString();
+            // const soNamePtr = soinfo.add(376).readPointer();
+            // const soName = soNamePtr.readCString();
+            const soName = soinfo.add(376).readPointer().readCString();
 
-            if (!soNameSet.has(soName)) {
+            if (soName && !soNameSet.has(soName)) {
               soNameSet.add(soName);
               const module = Process.findModuleByName(soName);
               if (module) {
                 const base = module.base;
-                const initProc = soinfo.add(184).readPointer();
-                const initArray = soinfo.add(152).readPointer();
-                const initArrayCount = soinfo.add(160).readU64();
+                const initProc = soinfo.add(240).readPointer();
+                const initArray = soinfo.add(224).readPointer();
+                const initArrayCount = soinfo.add(228).readU32();
 
-                const initArrayFuncs = Array.from({ length: initArrayCount }, (_, index) =>
-                  initArray.add(Process.pointerSize * index).readPointer().sub(base)
-                );
+                const initArrayFuncs = Array.from({ length: initArrayCount }, (_, index) => {
+                  const pointer = initArray.add(4 * index).readPointer();
+                  if (pointer.toString() === "0x0") {
+                    return null;
+                  }
+                  return pointer.sub(base);
+                }).filter(item => item !== null);
 
                 console.log(`
-[*] call_constructors onEnter
+[*] linker call_constructors onEnter
 - so_name: ${soName}
 - init_proc: ${(initProc == 0x0) ? "null" : initProc.sub(base)}
 - init_array: ${(initArray == 0x0) ? "null" : initArray.sub(base)}
@@ -193,8 +259,11 @@ function regularBypass() {
 - before: ${filePath}
 - after: ${fakeMapsPath}`);
 
-        const bufstr = File.readAllText(filePath);
-        File.writeAllText(fakeMapsPath, replaceKeyword(bufstr));
+        if (autoGenMaps) {
+          const bufstr = File.readAllText(filePath);
+          File.writeAllText(fakeMapsPath, replaceKeyword(bufstr));
+        }
+
         const filename = Memory.allocUtf8String(fakeMapsPath);
         args[0] = filename;
       }
@@ -208,14 +277,16 @@ function main() {
   hookSoInit();
   regularBypass();
 
-  const dlopenAddr = Module.findExportByName(null, "android_dlopen_ext");
+  const dlopenAddr = Module.findExportByName("libdl.so", "android_dlopen_ext");
   Interceptor.attach(dlopenAddr, {
     onEnter: function (args) {
       const pathptr = args[0];
       if (pathptr) {
         const path = ptr(pathptr).readCString();
         // 分析前先打开
-        // console.log("[dylib open]: ", path);
+        console.log(`
+[*] libdl.so android_dlopen_ext onEnter
+- path: ${path}`);
         if (path.includes(targetLib)) {
           this.isTarget = true;
         }
