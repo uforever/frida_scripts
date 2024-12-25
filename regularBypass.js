@@ -1,11 +1,15 @@
-const packageName = "com.yimian.envcheck";
-const targetLib = "libtestfrida.so";
-// const fakeMapsPath = `/data/user/0/${packageName}/maps`;
-const fakeMapsPath = `/data/data/${packageName}/maps`;
+const packageName = "com.wodi.who";
+const targetLibs = new Set([
+  "libmsaoaidsec.so",
+]);
 // 自动生成重定向maps文件
 // 可能会导致频繁IO 最好手动生成
-const autoGenMaps = true;
+const autoGenMaps = false;
+const onlyHookTargetLibs = true;
 
+
+// const tempFilePath = `/data/user/0/${packageName}/tempfile`;
+const tempFilePath = `/data/data/${packageName}/tempfile`;
 // 添加一些不需要hook的so
 const soNameSet = new Set([
   "libandroid.so",
@@ -13,6 +17,7 @@ const soNameSet = new Set([
   "libopenjdkjvmti.so",
   "libc.so",
   "libc++.so",
+  "libstdc++.so",
   "libcutils.so",
   "libgui.so",
   "libui.so",
@@ -31,9 +36,36 @@ const soNameSet = new Set([
   "libperfctl.so",
   "libEGL.so",
   "javalib.odex",
+  "libz.so",
   "system@priv-app@RtMiCloudSDK@RtMiCloudSDK.apk@classes.dex",
   "android.hardware.graphics.mapper@4.0-impl-mediatek.so",
 ]);
+
+const antiRoutineSet = new Set([
+  "0x11129",
+  "0x10975",
+]);
+
+function main() {
+  /*
+  第一步需要定位so
+  先把其它的都关了 确定是哪个so在反调试
+  顺便看一下在init还是JNI_OnLoad后
+  */
+  hookLibdl();
+  /*
+  其中还对libc.so进行了hook 包括一些通用bypass
+  和 pthread_create 线程启动情况
+  根据线程启动情况 填补上面的antiRoutineSet
+  */
+
+  /*
+  如果反调试进程在init中 需要hook下面这两个
+  确定init_proc和init_array的位置
+  */
+  // hookLinker();
+  // hookLinker64();
+}
 
 function hasKeyword(str) {
   return str.includes("frida") ||
@@ -47,6 +79,7 @@ function hasKeyword(str) {
     str.includes("/data/local/tmp") ||
     str.includes("GLib-GIO") ||
     str.includes("GDBusProxy") ||
+    str.includes("adb") ||
     str.includes("GumScript");
 }
 
@@ -66,7 +99,7 @@ function replaceKeyword(str) {
   return result;
 }
 
-function hookSoInit() {
+function hookLinker64() {
   // /system/bin/linker64
   const linker64 = Process.findModuleByName("linker64");
   if (linker64) {
@@ -86,30 +119,31 @@ function hookSoInit() {
             // const soName = soNamePtr.readCString();
             const soName = soinfo.add(408).readPointer().readCString();
 
-            if (soName && !soNameSet.has(soName)) {
-              console.log(`[+] soName: ${soName}`);
-              const module = Process.findModuleByName(soName);
-              if (module) {
-                const base = module.base;
-                const initProc = soinfo.add(184).readPointer();
-                const initArray = soinfo.add(152).readPointer();
-                const initArrayCount = soinfo.add(160).readU64();
+            if (soName) {
+              if (!soNameSet.has(soName)) {
+                soNameSet.add(soName);
+                const isTarget = onlyHookTargetLibs ? targetLibs.has(soName) : true;
+                if (isTarget) {
+                  const module = Process.findModuleByName(soName);
+                  if (module) {
+                    const base = module.base;
+                    const initProc = soinfo.add(184).readPointer();
+                    const initArray = soinfo.add(152).readPointer();
+                    const initArrayCount = soinfo.add(160).readU64() - 1;
 
-                const initArrayFuncs = Array.from({ length: initArrayCount }, (_, index) => {
-                  const pointer = initArray.add(8 * index).readPointer();
-                  if (pointer.toString() === "0x0") {
-                    return null;
-                  }
-                  return pointer.sub(base);
-                }).filter(item => item !== null);
+                    const initArrayFuncs = Array.from({ length: initArrayCount }, (_, index) =>
+                      initArray.add(8 * index).readPointer().sub(base)
+                    );
 
-                console.log(`
+                    console.log(`
 [*] linker64 call_constructors onEnter
 - so_name: ${soName}
 - init_proc: ${(initProc == 0x0) ? "null" : initProc.sub(base)}
 - init_array: ${(initArray == 0x0) ? "null" : initArray.sub(base)}
 - init_array_count: ${initArrayCount}
   ${initArrayFuncs.join(', ')}`);
+                  }
+                }
               }
             }
           }
@@ -117,7 +151,9 @@ function hookSoInit() {
       }
     }
   }
+}
 
+function hookLinker() {
   const linker = Process.findModuleByName("linker");
   if (linker) {
     const symbols = linker.enumerateSymbols();
@@ -136,30 +172,31 @@ function hookSoInit() {
             // const soName = soNamePtr.readCString();
             const soName = soinfo.add(376).readPointer().readCString();
 
-            if (soName && !soNameSet.has(soName)) {
-              soNameSet.add(soName);
-              const module = Process.findModuleByName(soName);
-              if (module) {
-                const base = module.base;
-                const initProc = soinfo.add(240).readPointer();
-                const initArray = soinfo.add(224).readPointer();
-                const initArrayCount = soinfo.add(228).readU32();
+            if (soName) {
+              if (!soNameSet.has(soName)) {
+                soNameSet.add(soName);
+                const isTarget = onlyHookTargetLibs ? targetLibs.has(soName) : true;
+                if (isTarget) {
+                  const module = Process.findModuleByName(soName);
+                  if (module) {
+                    const base = module.base;
+                    const initProc = soinfo.add(240).readPointer();
+                    const initArray = soinfo.add(224).readPointer();
+                    const initArrayCount = soinfo.add(228).readU32() - 1;
 
-                const initArrayFuncs = Array.from({ length: initArrayCount }, (_, index) => {
-                  const pointer = initArray.add(4 * index).readPointer();
-                  if (pointer.toString() === "0x0") {
-                    return null;
-                  }
-                  return pointer.sub(base);
-                }).filter(item => item !== null);
+                    const initArrayFuncs = Array.from({ length: initArrayCount }, (_, index) =>
+                      initArray.add(4 * index).readPointer().sub(base)
+                    );
 
-                console.log(`
+                    console.log(`
 [*] linker call_constructors onEnter
 - so_name: ${soName}
 - init_proc: ${(initProc == 0x0) ? "null" : initProc.sub(base)}
 - init_array: ${(initArray == 0x0) ? "null" : initArray.sub(base)}
 - init_array_count: ${initArrayCount}
   ${initArrayFuncs.join(', ')}`);
+                  }
+                }
               }
             }
           }
@@ -194,6 +231,7 @@ function regularBypass() {
   Interceptor.attach(strstrPtr, {
     onEnter: function (args) {
       const pattern = args[1].readCString();
+      // console.log(`!pattern: ${pattern}`);
       if (hasKeyword(pattern)) this.isCheck = true;
     },
     onLeave: function (retval) {
@@ -253,66 +291,119 @@ function regularBypass() {
   Interceptor.attach(openPtr, {
     onEnter: function (args) {
       const filePath = args[0].readCString();
-      if (filePath.includes("/proc/") && filePath.includes("/maps")) {
-        console.log(`
+      if (filePath.startsWith("/proc/")) {
+        if (filePath.endsWith("/maps") || filePath.endsWith("/stat")) {
+
+          console.log(`
 [*] libc open filePath replace
 - before: ${filePath}
-- after: ${fakeMapsPath}`);
+- after: ${tempFilePath}`);
 
-        if (autoGenMaps) {
-          const bufstr = File.readAllText(filePath);
-          File.writeAllText(fakeMapsPath, replaceKeyword(bufstr));
+          if (autoGenMaps) {
+            const bufstr = File.readAllText(filePath);
+            File.writeAllText(tempFilePath, replaceKeyword(bufstr));
+          }
+
+          const filename = Memory.allocUtf8String(tempFilePath);
+          args[0] = filename;
         }
-
-        const filename = Memory.allocUtf8String(fakeMapsPath);
-        args[0] = filename;
       }
     },
   });
 }
 
+function hookPthreadCreate() {
+  // hook pthread_create
+  const pthreadCreatePtr = Module.findExportByName("libc.so", 'pthread_create');
+  const doNothing = new NativeCallback(() => { }, 'void', []);
+  Interceptor.attach(pthreadCreatePtr, {
+    onEnter: function (args) {
+      const startRoutine = args[2];
+      const module = Process.findModuleByAddress(startRoutine);
 
-function main() {
+      if (targetLibs.has(module.name)) {
+        const offset = startRoutine.sub(module.base);
 
-  hookSoInit();
-  regularBypass();
+        console.log(`
+[*] libc pthread_create onEnter
+- module: ${module.name}
+- offset: ${offset}`);
 
-  const dlopenAddr = Module.findExportByName("libdl.so", "android_dlopen_ext");
+        if (antiRoutineSet.has(offset.toString())) args[2] = doNothing;
+
+      }
+    }
+  });
+}
+
+function hookLibdl() {
+  const dlopenAddr = Module.findExportByName("libdl.so", "dlopen");
   Interceptor.attach(dlopenAddr, {
     onEnter: function (args) {
       const pathptr = args[0];
       if (pathptr) {
         const path = ptr(pathptr).readCString();
+
+        if (path === "libc.so") {
+          this.isTarget = true;
+        }
+      }
+    },
+    onLeave: function (_retval) {
+      if (this.isTarget) {
+        console.log(`
+[*] libdl.so dlopen onEnter
+- file: libc.so`);
+
+
+        hookPthreadCreate();
+        // regularBypass(); // 一些通用绕过方法
+      }
+    }
+  });
+
+  const androidDlopenExtAddr = Module.findExportByName("libdl.so", "android_dlopen_ext");
+  Interceptor.attach(androidDlopenExtAddr, {
+    onEnter: function (args) {
+      const pathptr = args[0];
+      if (pathptr) {
+        const path = ptr(pathptr).readCString();
+        this.filename = path.split('/').pop();
+
         // 分析前先打开
         console.log(`
 [*] libdl.so android_dlopen_ext onEnter
+- file: ${this.filename}
 - path: ${path}`);
-        if (path.includes(targetLib)) {
+
+
+        if (targetLibs.has(this.filename)) {
           this.isTarget = true;
         }
       }
     },
     onLeave: function () {
       if (this.isTarget) {
-        const jniOnload = Module.findExportByName(targetLib, "JNI_OnLoad");
-        console.log("[hit JNI_OnLoad]: " + jniOnload);
-        // 如果有输出的话 说明检测点在JNI_OnLoad之中或者之后
-        // 否则可能在.init_proc .init_array .init_xxx等函数中
-        Interceptor.attach(jniOnload, {
-          onEnter: function (_args) {
-            // 其中有检测是否有java层hook
-            // hook后 & 0x80000 != 0
-            console.log("[func invoke]: JNI_OnLoad");
-          },
-          onLeave: function () {
-            if (Java.available) {
-              // Java.perform(doJavaHook);
-            }
-          },
-        });
+        const filename = this.filename;
+        const jniOnload = Module.findExportByName(filename, "JNI_OnLoad");
+        if (jniOnload) {
+          Interceptor.attach(jniOnload, {
+            onEnter: function (_args) {
+              // 判断反调试是否在初始化时已经执行
+              console.log(`
+[*] ${filename} JNI_OnLoad onEnter`);
+            },
+            onLeave: function () {
+              if (Java.available) {
+                // Java.perform(doJavaHook);
+              }
+            },
+          });
+        }
       }
     },
   });
+
 }
 
 setImmediate(main);
