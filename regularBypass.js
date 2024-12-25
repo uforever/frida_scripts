@@ -4,7 +4,7 @@ const targetLibs = new Set([
 ]);
 // 自动生成重定向maps文件
 // 可能会导致频繁IO 最好手动生成
-const autoGenMaps = false;
+const autoGenMaps = true;
 const onlyHookTargetLibs = true;
 
 
@@ -41,30 +41,33 @@ const soNameSet = new Set([
   "android.hardware.graphics.mapper@4.0-impl-mediatek.so",
 ]);
 
-const antiRoutineSet = new Set([
-  "0x11129",
-  "0x10975",
-]);
 
+const antiRoutines = {
+  "libmsaoaidsec.so": [
+    // 0x1c544,
+    // 0x1b8d4,
+    // 0x26e5c,
+  ]
+};
 function main() {
   /*
-  第一步需要定位so
-  先把其它的都关了 确定是哪个so在反调试
-  顺便看一下在init还是JNI_OnLoad后
+  第一步需要定位so 确定是哪个so在反调试
+  顺便看一下是在init中还是JNI_OnLoad之后
   */
   hookLibdl();
-  /*
-  其中还对libc.so进行了hook 包括一些通用bypass
-  和 pthread_create 线程启动情况
-  根据线程启动情况 填补上面的antiRoutineSet
-  */
+}
 
+function patchLib(soName, base) {
   /*
-  如果反调试进程在init中 需要hook下面这两个
-  确定init_proc和init_array的位置
+  在目标库init前 对libc进行hook
+  hook pthread_create 检测执行的线程
+  绕过一些常见检测
   */
-  // hookLinker();
-  // hookLinker64();
+  hookPthreadCreate();
+  for (const offset of antiRoutines[soName]) {
+    Interceptor.replace(base.add(offset), new NativeCallback(() => { }, 'void', []));
+  }
+  // regularBypass(); // 通用绕过
 }
 
 function hasKeyword(str) {
@@ -102,112 +105,119 @@ function replaceKeyword(str) {
 function hookLinker64() {
   // /system/bin/linker64
   const linker64 = Process.findModuleByName("linker64");
-  if (linker64) {
-    const symbols = linker64.enumerateSymbols();
-    for (const symbol of symbols) {
-      if (symbol.name.includes("call_constructors")) {
+  if (!linker64) return;
 
-        console.log(`
+  const symbols = linker64.enumerateSymbols();
+  for (const symbol of symbols) {
+    if (symbol.name.includes("call_constructors")) {
+
+      console.log(`
 [+] hook Native Function
 - module: linker64
 - function: call_constructors`);
 
-        Interceptor.attach(symbol.address, {
-          onEnter: function (args) {
-            const soinfo = args[0];
-            // const soNamePtr = soinfo.add(408).readPointer();
-            // const soName = soNamePtr.readCString();
-            const soName = soinfo.add(408).readPointer().readCString();
+      Interceptor.attach(symbol.address, {
+        onEnter: function (args) {
+          const soinfo = args[0];
+          // const soNamePtr = soinfo.add(408).readPointer();
+          // const soName = soNamePtr.readCString();
+          const soName = soinfo.add(408).readPointer().readCString();
 
-            if (soName) {
-              if (!soNameSet.has(soName)) {
-                soNameSet.add(soName);
-                const isTarget = onlyHookTargetLibs ? targetLibs.has(soName) : true;
-                if (isTarget) {
-                  const module = Process.findModuleByName(soName);
-                  if (module) {
-                    const base = module.base;
-                    const initProc = soinfo.add(184).readPointer();
-                    const initArray = soinfo.add(152).readPointer();
-                    const initArrayCount = soinfo.add(160).readU64() - 1;
+          if (!soName || soNameSet.has(soName)) return;
+          soNameSet.add(soName);
+          const isTarget = onlyHookTargetLibs ? targetLibs.has(soName) : true;
+          if (!isTarget) return;
+          const module = Process.findModuleByName(soName);
+          if (!module) return;
+          const base = module.base;
+          const initProc = soinfo.add(184).readPointer();
+          const initArray = soinfo.add(152).readPointer();
+          const initArrayCount = soinfo.add(160).readU64() - 1;
 
-                    const initArrayFuncs = Array.from({ length: initArrayCount }, (_, index) =>
-                      initArray.add(8 * index).readPointer().sub(base)
-                    );
+          const initArrayFuncs = Array.from({ length: initArrayCount }, (_, index) =>
+            initArray.add(8 * index).readPointer().sub(base)
+          );
 
-                    console.log(`
+          console.log(`
 [*] linker64 call_constructors onEnter
 - so_name: ${soName}
 - init_proc: ${(initProc == 0x0) ? "null" : initProc.sub(base)}
 - init_array: ${(initArray == 0x0) ? "null" : initArray.sub(base)}
 - init_array_count: ${initArrayCount}
   ${initArrayFuncs.join(', ')}`);
-                  }
-                }
-              }
-            }
+
+          if (soName in antiRoutines) {
+            patchLib(soName, base);
           }
-        });
-      }
+        }
+      });
     }
   }
 }
 
 function hookLinker() {
   const linker = Process.findModuleByName("linker");
-  if (linker) {
-    const symbols = linker.enumerateSymbols();
-    for (const symbol of symbols) {
-      if (symbol.name.includes("call_constructors")) {
+  if (!linker) return;
 
-        console.log(`
+  const symbols = linker.enumerateSymbols();
+  for (const symbol of symbols) {
+    if (symbol.name.includes("call_constructors")) {
+
+      console.log(`
 [+] hook Native Function
 - module: linker
 - function: call_constructors`);
 
-        Interceptor.attach(symbol.address, {
-          onEnter: function (args) {
-            const soinfo = args[0];
-            // const soNamePtr = soinfo.add(376).readPointer();
-            // const soName = soNamePtr.readCString();
-            const soName = soinfo.add(376).readPointer().readCString();
+      Interceptor.attach(symbol.address, {
+        onEnter: function (args) {
+          const soinfo = args[0];
+          // const soNamePtr = soinfo.add(376).readPointer();
+          // const soName = soNamePtr.readCString();
+          const soName = soinfo.add(376).readPointer().readCString();
 
-            if (soName) {
-              if (!soNameSet.has(soName)) {
-                soNameSet.add(soName);
-                const isTarget = onlyHookTargetLibs ? targetLibs.has(soName) : true;
-                if (isTarget) {
-                  const module = Process.findModuleByName(soName);
-                  if (module) {
-                    const base = module.base;
-                    const initProc = soinfo.add(240).readPointer();
-                    const initArray = soinfo.add(224).readPointer();
-                    const initArrayCount = soinfo.add(228).readU32() - 1;
+          if (!soName || soNameSet.has(soName)) return;
+          soNameSet.add(soName);
+          const isTarget = onlyHookTargetLibs ? targetLibs.has(soName) : true;
+          if (!isTarget) return;
+          const module = Process.findModuleByName(soName);
+          if (!module) return;
+          const base = module.base;
+          const initProc = soinfo.add(240).readPointer();
+          const initArray = soinfo.add(224).readPointer();
+          const initArrayCount = soinfo.add(228).readU32() - 1;
 
-                    const initArrayFuncs = Array.from({ length: initArrayCount }, (_, index) =>
-                      initArray.add(4 * index).readPointer().sub(base)
-                    );
+          const initArrayFuncs = Array.from({ length: initArrayCount }, (_, index) =>
+            initArray.add(4 * index).readPointer().sub(base)
+          );
 
-                    console.log(`
+          console.log(`
 [*] linker call_constructors onEnter
 - so_name: ${soName}
 - init_proc: ${(initProc == 0x0) ? "null" : initProc.sub(base)}
 - init_array: ${(initArray == 0x0) ? "null" : initArray.sub(base)}
 - init_array_count: ${initArrayCount}
   ${initArrayFuncs.join(', ')}`);
-                  }
-                }
-              }
-            }
+
+          if (soName in antiRoutines) {
+            patchLib(soName, base);
           }
-        });
-      }
+        }
+      });
     }
   }
 }
 
 // adb pull /system/lib64/libc.so
 function regularBypass() {
+  fgetsHook();
+  strstrHook();
+  // strcmpHook(); // 不稳定 容易崩 
+  accessHook();
+  connectHook();
+  openHook();
+}
+
+function fgetsHook() {
   // hook fgets 函数
   const fgetsPtr = Module.findExportByName("libc.so", 'fgets');
   const fgets = new NativeFunction(fgetsPtr, 'pointer', ['pointer', 'int', 'pointer']);
@@ -217,15 +227,19 @@ function regularBypass() {
 
     const result = replaceKeyword(bufstr);
 
+    /*
     if (bufstr !== result) console.log(`
 [*] fgets replace
 - before: ${bufstr}
 - after: ${result}`);
+    */
 
     Memory.writeUtf8String(buffer, result);
     return retval;
   }, 'pointer', ['pointer', 'int', 'pointer']));
+}
 
+function strstrHook() {
   // hook strstr 函数
   const strstrPtr = Module.findExportByName("libc.so", 'strstr');
   Interceptor.attach(strstrPtr, {
@@ -238,10 +252,10 @@ function regularBypass() {
       if (this.isCheck) retval.replace(0);
     }
   });
+}
 
+function strcmpHook() {
   // hook strcmp 函数
-  // 不稳定 容易崩
-  /*
   const strcmpPtr = Module.findExportByName("libc.so", 'strcmp');
   Interceptor.attach(strcmpPtr, {
     onEnter: function (args) {
@@ -253,8 +267,9 @@ function regularBypass() {
       if (this.isCheck) retval.replace(0);
     }
   });
-  */
+}
 
+function accessHook() {
   // hook access 函数
   const accessPtr = Module.findExportByName("libc.so", 'access');
   Interceptor.attach(accessPtr, {
@@ -271,7 +286,9 @@ function regularBypass() {
       if (this.isCheck) retval.replace(-1); // 表示访问失败
     },
   });
+}
 
+function connectHook() {
   // hook connect 函数
   const connectPtr = Module.findExportByName("libc.so", 'connect');
   Interceptor.attach(connectPtr, {
@@ -285,7 +302,9 @@ function regularBypass() {
       if (this.isCheck) retval.replace(-1); // 表示连接失败
     },
   });
+}
 
+function openHook() {
   // hook open 函数
   const openPtr = Module.findExportByName("libc.so", 'open');
   Interceptor.attach(openPtr, {
@@ -294,10 +313,12 @@ function regularBypass() {
       if (filePath.startsWith("/proc/")) {
         if (filePath.endsWith("/maps") || filePath.endsWith("/stat")) {
 
+          /*
           console.log(`
 [*] libc open filePath replace
 - before: ${filePath}
 - after: ${tempFilePath}`);
+          */
 
           if (autoGenMaps) {
             const bufstr = File.readAllText(filePath);
@@ -315,7 +336,6 @@ function regularBypass() {
 function hookPthreadCreate() {
   // hook pthread_create
   const pthreadCreatePtr = Module.findExportByName("libc.so", 'pthread_create');
-  const doNothing = new NativeCallback(() => { }, 'void', []);
   Interceptor.attach(pthreadCreatePtr, {
     onEnter: function (args) {
       const startRoutine = args[2];
@@ -329,14 +349,13 @@ function hookPthreadCreate() {
 - module: ${module.name}
 - offset: ${offset}`);
 
-        if (antiRoutineSet.has(offset.toString())) args[2] = doNothing;
-
       }
     }
   });
 }
 
 function hookLibdl() {
+  /*
   const dlopenAddr = Module.findExportByName("libdl.so", "dlopen");
   Interceptor.attach(dlopenAddr, {
     onEnter: function (args) {
@@ -355,12 +374,12 @@ function hookLibdl() {
 [*] libdl.so dlopen onEnter
 - file: libc.so`);
 
-
-        hookPthreadCreate();
+        // hookPthreadCreate();
         // regularBypass(); // 一些通用绕过方法
       }
     }
   });
+  */
 
   const androidDlopenExtAddr = Module.findExportByName("libdl.so", "android_dlopen_ext");
   Interceptor.attach(androidDlopenExtAddr, {
@@ -379,6 +398,14 @@ function hookLibdl() {
 
         if (targetLibs.has(this.filename)) {
           this.isTarget = true;
+
+          /*
+          在进入so文件之间 需要先hook linker
+          以找到合适的时机进行hook 等init执行完后再patch就来不及了
+          可以顺便获取init_proc和init_array的位置
+          */
+          hookLinker();
+          hookLinker64();
         }
       }
     },
