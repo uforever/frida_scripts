@@ -57,6 +57,7 @@ function main() {
             console.log(`
 [!] RegisterNativeMethod
 - method: ${methodName}
+- module: ${module.name}
 - offset: ${offset}`);
             Interceptor.attach(args[2], {
               onLeave: function (retval) {
