@@ -34,26 +34,7 @@ function libdlHook() {
       }
     },
     onLeave: function () {
-      if (this.isTarget) {
-        const filename = this.filename;
-        const jniOnload = Module.findExportByName(filename, "JNI_OnLoad");
-        if (jniOnload) {
-          Interceptor.attach(jniOnload, {
-            onEnter: function (_args) {
-              // 判断反调试是否在初始化时已经执行
-              // 还是在JNI_OnLoad之中执行
-              console.log(`
-[*] ${filename} JNI_OnLoad onEnter`);
-              soDump(targetLib);
-            },
-            onLeave: function () {
-              if (Java.available) {
-                // Java.perform(doJavaHook);
-              }
-            },
-          });
-        }
-      }
+      if (this.isTarget) soDump(targetLib);
     },
   });
 }
@@ -84,6 +65,8 @@ if __name__ == '__main__':
         print("Usage: python soDumper.py <package_name> <so_name>")
         sys.exit(1)
 
+    # ./server -l 0.0.0.0:24486
+    # adb forward tcp:24486 tcp:24486
     device = frida.get_device_manager().add_remote_device("127.0.0.1:24486")
     pid = device.spawn([package_name])
     process = device.attach(pid)
@@ -94,3 +77,15 @@ if __name__ == '__main__':
     time.sleep(2)
     device.resume(pid)
     sys.stdin.read()
+
+""" 输出示例
+[*] Dump so File
+- name: libDexHelper.so
+- base: 0x70c8db0000
+- size: 1089536
+[+] Dumped Successfully
+"""
+
+""" 修复
+SoFixer -s libInput.so -o libOutput.so -m 0x70c8db0000
+"""
