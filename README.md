@@ -57,3 +57,5 @@
 - [获取so文件init信息](soInitInfo.js)
 
 - [通用绕过frida检测基础](regularBypass.js)
+
+- [so脱壳时机以JNI_OnLoad为例](soDumper.py)
