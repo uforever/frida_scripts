@@ -59,3 +59,5 @@
 - [通用绕过frida检测基础](regularBypass.js)
 
 - [so脱壳时机以JNI_OnLoad为例](soDumper.py)
+
+- [Trace native基本块辅助分析ollvm](nativeTrace.js)
