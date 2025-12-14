@@ -28,6 +28,8 @@
 
 - [hook clone调用](hookClone.js)
 
+- [两种nop线程函数的方式](nopThreadFunc.js)
+
 - [线程反调试绕过](pthreadBypass.js)
 
 - [frida反调试+patchCode](patchCode.js)
