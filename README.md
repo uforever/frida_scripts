@@ -26,6 +26,8 @@
 
 - [native动态注册监控](nativeRegister.js)
 
+- [hook clone调用](hookClone.js)
+
 - [线程反调试绕过](pthreadBypass.js)
 
 - [frida反调试+patchCode](patchCode.js)
