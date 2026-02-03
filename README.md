@@ -65,3 +65,5 @@
 - [so dump(脱壳) 以时机JNI_OnLoad为例](soDumper.py)
 
 - [Trace native基本块辅助分析ollvm](nativeTrace.js)
+
+- [stalker trace主程序指令](stalkerTrace.js)
