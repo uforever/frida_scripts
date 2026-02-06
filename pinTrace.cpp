@@ -71,9 +71,9 @@ VOID TraceLog(ADDRINT ip, char* bytesStr, char* disasmStr, CONTEXT* ctx) {
 	oss << "eflags: " << std::setw(8) << PIN_GetContextReg(ctx, LEVEL_BASE::REG::REG_EFLAGS);
 #endif
 
-	traceFile << ip << "  "
-		<< std::setw(44) << bytes << "  "
-		<< std::setw(50) << disasm << "  "
+	traceFile << ip << " | "
+		<< std::setw(44) << bytes << " | "
+		<< std::setw(50) << disasm << " | "
 		<< oss.str() << std::endl;
 }
 
