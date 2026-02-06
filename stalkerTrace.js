@@ -47,7 +47,7 @@ Stalker.follow(mainThread.id, {
             ];
 
           const regStr = registers.map(r => `${r}: ${formattedAddress(context[r])}`).join(' ');
-          console.log(`${insAddress}  ${byteCode}  ${disassemble} ${regStr}`);
+          console.log(`${insAddress} | ${byteCode} | ${disassemble} | ${regStr}`);
         };
         iterator.putCallout(onMatch);
       }
