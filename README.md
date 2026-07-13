@@ -67,3 +67,5 @@
 - [Trace native基本块辅助分析ollvm](nativeTrace.js)
 
 - [stalker trace主程序指令](stalkerTrace.js)
+
+- [硬件密钥证明测试案例](bypass_key_attest.js)
