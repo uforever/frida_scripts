@@ -4,24 +4,24 @@ function HookNative() {
     console.log("-------- Start Hooking --------");
 
     // 寻找目标库的基址
-    // const baseAddress = Module.findBaseAddress(targetLib);
+    // const baseAddress = Process.getModuleByName(targetLib).base;
     // console.log("baseAddress: " + baseAddress);
 
     // 直接寻找导出函数
     // if (baseAddress) {
-    //     const funcAddr = Module.findExportByName(targetLib, '_Z4fuckP7_JNIEnvP7_jclassP8_jstring');
+    //     const funcAddr = Process.getModuleByName(targetLib).findExportByName('_Z4fuckP7_JNIEnvP7_jclassP8_jstring');
     //     console.log("funcAddr: " + funcAddr);
     //     console.log(`offset: 0x${(funcAddr - baseAddress).toString(16)}`);
     // }
 
     // 枚举导出
-    // const exports = Module.enumerateExports(targetLib);
+    // const exports = Process.getModuleByName(targetLib).enumerateExports();
     // for (const iterator of exports) {
     //     console.log(JSON.stringify(iterator))
     // }
 
     // 枚举符号 非导出函数要在这里找
-    const symbols = Module.enumerateSymbols(targetLib);
+    const symbols = Process.getModuleByName(targetLib).enumerateSymbols();
     for (const iterator of symbols) {
         // if (iterator.name === "ll11lll1l1" && iterator.type === "function") {
         // target function

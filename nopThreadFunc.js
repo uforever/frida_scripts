@@ -45,7 +45,8 @@ function hookMsaoaidInitProc() {
 }
 
 function main() {
-  const adeAddr = Module.findExportByName(null, "android_dlopen_ext");
+  const libdl = Process.getModuleByName("libdl.so");
+  const adeAddr = libdl.getExportByName("android_dlopen_ext");
   Interceptor.attach(adeAddr, {
     onEnter: function (args) {
       const pathptr = args[0];
@@ -63,7 +64,7 @@ function main() {
     },
     onLeave: function () {
       if (this.isBang) {
-        const bangBase = Module.findBaseAddress("libDexHelper.so");
+        const bangBase = Process.getModuleByName("libDexHelper.so").base;
         nopFunc(bangBase.add(0x4b3ec));
         nopFunc(bangBase.add(0x58990));
         nopFunc(bangBase.add(0x512f8));

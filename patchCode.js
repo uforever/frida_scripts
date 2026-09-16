@@ -2,7 +2,7 @@ const targetLib = "libnative-lib.so";
 
 function main() {
     // 先通过dlopen探索具体是哪个so文件在反frida调试
-    const adeAddr = Module.findExportByName(null, "android_dlopen_ext");
+    const adeAddr = Process.getModuleByName("libdl.so").getExportByName("android_dlopen_ext");
     Interceptor.attach(adeAddr, {
         onEnter: function (args) {
             const pathptr = args[0];
@@ -18,12 +18,12 @@ function main() {
         onLeave: function () {
             // 对这个so文件的符号进行hook 看看具体是哪个函数引起的崩溃
             if (this.isTarget) {
-                const baseAddr = Module.findBaseAddress(targetLib);
+                const baseAddr = Process.getModuleByName(targetLib).base;
                 console.log("[dylib base address]: ", baseAddr);
 
                 /*
                 // 以JNI_OnLoad为例
-                const jniOnload = Module.findExportByName(targetLib, "JNI_OnLoad");
+                const jniOnload = Process.getModuleByName(targetLib).findExportByName("JNI_OnLoad");
                 console.log("[hit JNI_OnLoad]: " + jniOnload);
                 // 如果有输出的话 说明检测点在JNI_OnLoad之中或者之后
                 // 否则可能在.init_proc .init_array .init_xxx等函数中
@@ -39,7 +39,7 @@ function main() {
                 
 
                 // 目标函数名
-                const funcAddr = Module.findExportByName(targetLib, "Java_com_r0ysue_test1_MainActivity_stringFromJNI");
+                const funcAddr = Process.getModuleByName(targetLib).findExportByName("Java_com_r0ysue_test1_MainActivity_stringFromJNI");
                 console.log("[hit target func]: " + funcAddr);
                 Interceptor.attach(funcAddr, {
                     onEnter: function (_args) {
@@ -53,7 +53,7 @@ function main() {
 
                 /*
                 // 查看是否有新的线程被创建
-                Interceptor.attach(Module.findExportByName("libc.so", "pthread_create"), {
+                Interceptor.attach(Process.getModuleByName("libc.so").getExportByName("pthread_create"), {
                     onEnter(args) {
                         // 先获取到线程函数的地址 也就是pthread_create的第三个参数
                         // 再计算偏移 这里是0x10448 后续对其进行置空
@@ -87,7 +87,7 @@ function main() {
                 // hook strstr
                 // strstr(v2, "frida")
                 // strstr(v2, ":69A2")
-                Interceptor.attach(Module.findExportByName("libc.so", "strstr"), {
+                Interceptor.attach(Process.getModuleByName("libc.so").getExportByName("strstr"), {
                     onEnter: function (args) {
                         const keyWord = args[1].readCString();
                         if (keyWord.includes("frida") || keyWord.includes(":69A2")) {
@@ -104,7 +104,7 @@ function main() {
 
                 // hook access
                 // access("/data/local/tmp/re.frida.server", 0)
-                Interceptor.attach(Module.findExportByName("libc.so", "access"), {
+                Interceptor.attach(Process.getModuleByName("libc.so").getExportByName("access"), {
                     onEnter: function (args) {
                         const path = args[0].readCString();
                         if (path.includes("re.frida.server")) {

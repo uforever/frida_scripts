@@ -2,7 +2,7 @@ const targetLib = "libCheckRegister.so";
 
 // int sub_1498(char *a1, char *a2)
 function sub_1498(arg1, arg2) {
-  const baseAddress = Module.findBaseAddress(targetLib);
+  const baseAddress = Process.getModuleByName(targetLib).base;
   console.log("baseAddress: " + baseAddress);
 
   // KEY: offset

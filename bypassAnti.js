@@ -3,7 +3,8 @@ let alreadyHook = false;
 let classFactory = null;
 
 function main() {
-  const adeAddr = Module.findExportByName(null, "android_dlopen_ext");
+  const libdl = Process.getModuleByName("libdl.so");
+  const adeAddr = libdl.getExportByName("android_dlopen_ext");
   Interceptor.attach(adeAddr, {
     onEnter: function (args) {
       const pathptr = args[0];
@@ -20,7 +21,7 @@ function main() {
     },
     onLeave: function () {
       if (this.isTarget) {
-        const jniOnload = Module.findExportByName(targetLib, "JNI_OnLoad");
+        const jniOnload = Process.getModuleByName(targetLib).findExportByName("JNI_OnLoad");
         console.log("[hit JNI_OnLoad]: " + jniOnload);
         // 如果有输出的话 说明检测点在JNI_OnLoad之中或者之后
         // 否则可能在.init_proc .init_array .init_xxx等函数中
@@ -85,7 +86,7 @@ function hook_before_init_proc(targetSo) {
   console.log("targetSo.base: " + baseAddr);
 
   // 获取函数hook之前的前8个字节
-  // const xxxPtr = Module.findExportByName("libc.so", "xxx");
+  // const xxxPtr = Process.getModuleByName("libc.so").findExportByName("xxx");
   // console.log(`access first 8 bytes before hook: ${hexdump(xxxPtr, {
   //   offset: 0,
   //   length: 8,
@@ -102,7 +103,7 @@ function hook_before_init_proc(targetSo) {
 
   // 分析前先打开这里 注释掉上面
   // hook pthread_create 函数
-  // Interceptor.attach(Module.findExportByName("libc.so", "pthread_create"), {
+  // Interceptor.attach(Process.getModuleByName("libc.so").getExportByName("pthread_create"), {
   //   onEnter(args) {
   //     const threadFuncAddr = args[2];
   //     console.log("The thread function address is " + ptr(threadFuncAddr).sub(baseAddr));
@@ -134,20 +135,20 @@ function nop(base, offset) {
 
 function generalBypassHook() {
   // hook fgets 函数
-  const fgetsPtr = Module.findExportByName("libc.so", 'fgets');
+  const fgetsPtr = Process.getModuleByName("libc.so").getExportByName('fgets');
   const fgets = new NativeFunction(fgetsPtr, 'pointer', ['pointer', 'int', 'pointer']);
   Interceptor.replace(fgetsPtr, new NativeCallback(function (buffer, size, fp) {
     const retval = fgets(buffer, size, fp);
-    const bufstr = Memory.readUtf8String(buffer);
+    const bufstr = buffer.readUtf8String();
     if (bufstr.includes("TracerPid:")) {
-      Memory.writeUtf8String(buffer, "TracerPid:\t0");
-      console.log("tracerpid replaced: " + Memory.readUtf8String(buffer));
+      buffer.writeUtf8String("TracerPid:\t0");
+      console.log("tracerpid replaced: " + buffer.readUtf8String());
     }
     return retval;
   }, 'pointer', ['pointer', 'int', 'pointer']));
 
   // hook strstr 函数
-  const strstrPtr = Module.findExportByName("libc.so", 'strstr');
+  const strstrPtr = Process.getModuleByName("libc.so").getExportByName('strstr');
   Interceptor.attach(strstrPtr, {
     onEnter: function (args) {
       const keyWord = args[1].readCString();
@@ -171,7 +172,7 @@ function generalBypassHook() {
   });
 
   // hook access 函数
-  const accessPtr = Module.findExportByName("libc.so", 'access');
+  const accessPtr = Process.getModuleByName("libc.so").getExportByName('access');
   Interceptor.attach(accessPtr, {
     onEnter: function (args) {
       const path = args[0].readCString();

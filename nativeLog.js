@@ -1,7 +1,7 @@
 const targetLib = "libregister.so";
 
 function main() {
-    Interceptor.attach(Module.findExportByName(null, "android_dlopen_ext"),
+    Interceptor.attach(Process.getModuleByName("libdl.so").getExportByName("android_dlopen_ext"),
         {
             onEnter: function (args) {
                 const pathptr = args[0];
@@ -17,7 +17,7 @@ function main() {
             onLeave: function (_retval) {
                 if (this.isTarget) {
 
-                    const baseAddr = Module.findBaseAddress(targetLib);
+                    const baseAddr = Process.getModuleByName(targetLib).base;
                     console.log("[target lib base address]: ", baseAddr);
 
                     // 第一次加密

@@ -219,11 +219,11 @@ function regularBypass() {
 
 function fgetsHook() {
   // hook fgets 函数
-  const fgetsPtr = Module.findExportByName("libc.so", 'fgets');
+  const fgetsPtr = Process.getModuleByName("libc.so").getExportByName('fgets');
   const fgets = new NativeFunction(fgetsPtr, 'pointer', ['pointer', 'int', 'pointer']);
   Interceptor.replace(fgetsPtr, new NativeCallback(function (buffer, size, fp) {
     const retval = fgets(buffer, size, fp);
-    const bufstr = Memory.readCString(buffer);
+    const bufstr = buffer.readCString();
 
     const result = replaceKeyword(bufstr);
 
@@ -234,14 +234,14 @@ function fgetsHook() {
 - after: ${result}`);
     */
 
-    Memory.writeUtf8String(buffer, result);
+    buffer.writeUtf8String(result);
     return retval;
   }, 'pointer', ['pointer', 'int', 'pointer']));
 }
 
 function strstrHook() {
   // hook strstr 函数
-  const strstrPtr = Module.findExportByName("libc.so", 'strstr');
+  const strstrPtr = Process.getModuleByName("libc.so").getExportByName('strstr');
   Interceptor.attach(strstrPtr, {
     onEnter: function (args) {
       const pattern = args[1].readCString();
@@ -256,7 +256,7 @@ function strstrHook() {
 
 function strcmpHook() {
   // hook strcmp 函数
-  const strcmpPtr = Module.findExportByName("libc.so", 'strcmp');
+  const strcmpPtr = Process.getModuleByName("libc.so").getExportByName('strcmp');
   Interceptor.attach(strcmpPtr, {
     onEnter: function (args) {
       const str0 = args[0].readCString();
@@ -271,7 +271,7 @@ function strcmpHook() {
 
 function accessHook() {
   // hook access 函数
-  const accessPtr = Module.findExportByName("libc.so", 'access');
+  const accessPtr = Process.getModuleByName("libc.so").getExportByName('access');
   Interceptor.attach(accessPtr, {
     onEnter: function (args) {
       const path = args[0].readCString();
@@ -290,7 +290,7 @@ function accessHook() {
 
 function connectHook() {
   // hook connect 函数
-  const connectPtr = Module.findExportByName("libc.so", 'connect');
+  const connectPtr = Process.getModuleByName("libc.so").getExportByName('connect');
   Interceptor.attach(connectPtr, {
     onEnter: function (args) {
       const portByte0 = args[1].add(2).readU8();
@@ -306,7 +306,7 @@ function connectHook() {
 
 function openHook() {
   // hook open 函数
-  const openPtr = Module.findExportByName("libc.so", 'open');
+  const openPtr = Process.getModuleByName("libc.so").getExportByName('open');
   Interceptor.attach(openPtr, {
     onEnter: function (args) {
       const filePath = args[0].readCString();
@@ -335,7 +335,7 @@ function openHook() {
 
 function hookPthreadCreate() {
   // hook pthread_create
-  const pthreadCreatePtr = Module.findExportByName("libc.so", 'pthread_create');
+  const pthreadCreatePtr = Process.getModuleByName("libc.so").getExportByName('pthread_create');
   Interceptor.attach(pthreadCreatePtr, {
     onEnter: function (args) {
       const startRoutine = args[2];
@@ -356,7 +356,7 @@ function hookPthreadCreate() {
 
 function hookLibdl() {
   /*
-  const dlopenAddr = Module.findExportByName("libdl.so", "dlopen");
+  const dlopenAddr = Process.getModuleByName("libdl.so").findExportByName("dlopen");
   Interceptor.attach(dlopenAddr, {
     onEnter: function (args) {
       const pathptr = args[0];
@@ -381,7 +381,7 @@ function hookLibdl() {
   });
   */
 
-  const androidDlopenExtAddr = Module.findExportByName("libdl.so", "android_dlopen_ext");
+  const androidDlopenExtAddr = Process.getModuleByName("libdl.so").getExportByName("android_dlopen_ext");
   Interceptor.attach(androidDlopenExtAddr, {
     onEnter: function (args) {
       const pathptr = args[0];
@@ -412,7 +412,7 @@ function hookLibdl() {
     onLeave: function () {
       if (this.isTarget) {
         const filename = this.filename;
-        const jniOnload = Module.findExportByName(filename, "JNI_OnLoad");
+        const jniOnload = Process.findModuleByName(filename)?.findExportByName("JNI_OnLoad");
         if (jniOnload) {
           Interceptor.attach(jniOnload, {
             onEnter: function (_args) {

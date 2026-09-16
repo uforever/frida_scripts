@@ -39,7 +39,7 @@ function prettyMethod(method_id, withSignature) {
 }
 
 function main() {
-  const libart = Module.enumerateExports("libart.so");
+  const libart = Process.getModuleByName("libart.so").enumerateExports();
 
   for (const export_func of libart) {
     if (export_func.name.includes("RegisterNativeMethod")) {

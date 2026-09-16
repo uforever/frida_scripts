@@ -1,11 +1,12 @@
 function main() {
-  const libart = Module.enumerateSymbols("libart.so");
+  const libart = Process.getModuleByName("libart.so");
+  const symbols = libart.enumerateSymbols();
 
   const dexFileSizeSet = new Set();
 
   // art/runtime/class_linker.cc
   // ClassLinker::LoadMethod()
-  for (const item of libart) {
+  for (const item of symbols) {
     if (item.name.includes("LoadMethod")) {
       console.log(JSON.stringify(item));
       const targetFuncAddr = item.address;

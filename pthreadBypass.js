@@ -2,7 +2,7 @@ const targetLib = "libcrackme.so";
 
 function main() {
   // hook pthread_create函数 其第三个参数为函数指针
-  Interceptor.attach(Module.findExportByName("libc.so", "pthread_create"), {
+  Interceptor.attach(Process.getModuleByName("libc.so").getExportByName("pthread_create"), {
     onEnter: function(args) {
       const pthreadFunc = args[2];
       try {

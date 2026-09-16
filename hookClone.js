@@ -17,7 +17,8 @@ v32 = clone(__pthread_start, v18, 4001536LL, v30, v30 + 16, v22 + 8, v30 + 16);
 */
 
 function hookClone() {
-  const cloneFunc = Module.findExportByName(null, "clone");
+  const libc = Process.getModuleByName('libc.so');
+  const cloneFunc = libc.findExportByName("clone");
   if (!cloneFunc) {
     console.log("clone function not found");
     return;
@@ -34,9 +35,6 @@ function hookClone() {
           console.log(`Thread start routine found: ${moduleName} + 0x${offset.toString(16)}`);
         }
       }
-    },
-    onLeave(retval) {
-      // do nothing
     }
   });
 }

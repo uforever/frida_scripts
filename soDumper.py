@@ -12,11 +12,11 @@ function soDump(soName) {
   const size = module.size;
   const base = module.base;
   Memory.protect(base, size, 'rwx');
-  send({ name: soName, base: base, size: size }, Memory.readByteArray(base, size));
+  send({ name: soName, base: base, size: size }, base.readByteArray(size));
 }
 
 function libdlHook() {
-  const androidDlopenExtAddr = Module.findExportByName("libdl.so", "android_dlopen_ext");
+  const androidDlopenExtAddr = Process.getModuleByName("libdl.so").getExportByName("android_dlopen_ext");
   Interceptor.attach(androidDlopenExtAddr, {
     onEnter: function (args) {
       const pathptr = args[0];

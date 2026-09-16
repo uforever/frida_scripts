@@ -1,7 +1,7 @@
 const targetLib = "libcrackme.so";
 
 function main() {
-    const baseAddr = Module.findBaseAddress(targetLib);
+    const baseAddr = Process.getModuleByName(targetLib).base;
     console.log("[dylib base address]: ", baseAddr);
 
     const off_628C = baseAddr.add(0x628C);

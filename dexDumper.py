@@ -88,14 +88,14 @@ function main() {
 
   // adb pull /apex/com.android.art/lib64/libart.so
   const libart = Process.findModuleByName("libart.so");
-  const libartSymbols = Module.enumerateSymbols("libart.so");
+  const libartSymbols = libart.enumerateSymbols();
 
 
   // OpenCommon 在较新系统上未经测试 关闭下面这一段 不影响使用
   // adb pull /apex/com.android.art/lib64/libdexfile.so
   // libdexfile.so中hook OpenCommon函数
   const libdexfile = Process.findModuleByName("libdexfile.so");
-  const libdexfileSymbols = Module.enumerateSymbols("libdexfile.so");
+  const libdexfileSymbols = libdexfile.enumerateSymbols();
 
   for (const symbol of libdexfileSymbols) {
     if (symbol.name.includes("OpenCommon")) {
