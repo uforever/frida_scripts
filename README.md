@@ -56,6 +56,7 @@ Frida 安卓逆向脚本集合。所有脚本已迁移至 **Frida 17.x** 新版 
 | [unpinMore.js](unpinMore.js) | 更全面的 SSL unpinning：Java/Android/OkHttp/Conscrypt/Apache/Xutils 多框架，含轻度混淆对抗 |
 | [certificateExport.js](certificateExport.js) | 双向 TLS 客户端证书导出：hook `KeyStore$PrivateKeyEntry` 导出私钥与证书链为 PKCS12 |
 | [socketHook.js](socketHook.js) | socket 抓包：Java 层 `Socket`/TCP/UDP 读写 + native `SSL_read`/`SSL_write` 明文拦截 |
+| [flutterSslUnpinning.js](flutterSslUnpinning.js) | Flutter（libflutter.so）TLS 校验绕过：以 `android_dlopen_ext` 为时机 hook Dart 的 `CertificateCallback` 等函数强制返回 1，注释中含 IDA 字节序列搜索、Diaphora 函数匹配、Binary Ninja WARP 签名库等三种无符号 so 函数偏移定位方法 |
 
 ### 算法与加密
 
